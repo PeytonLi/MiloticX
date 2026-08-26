@@ -46,6 +46,12 @@ describe('classifyFailure', () => {
     ).toBe('missing-dependency');
   });
 
+  it('classifies the /bin/sh "not found" form as missing-dependency', () => {
+    expect(
+      classifyFailure({ ...base, exitCode: 127, stderr: '/bin/sh: 1: nonexistent-command: not found' }),
+    ).toBe('missing-dependency');
+  });
+
   it('classifies ENOENT as missing-dependency', () => {
     expect(
       classifyFailure({ ...base, exitCode: 1, stderr: "Error: ENOENT: no such file or directory, open 'x'" }),

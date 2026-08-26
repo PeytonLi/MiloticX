@@ -23,6 +23,7 @@ const SECRET_MARKERS = [
 
 const MISSING_DEP_MARKERS = [
   'command not found',
+  ': not found',
   'not recognized as an internal or external command',
   'no such file or directory',
   'is not a recognized',
