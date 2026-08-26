@@ -1,0 +1,49 @@
+{
+  "name": "readme-verifier",
+  "manifest": {
+    "model": {
+      "name": "deepseek/deepseek-v4-pro"
+    },
+    "instructions": "You verify a repository's README by actually running its setup steps, then propose fixes. Given a public repo URL, you: (1) read the README through the GitHub connector; (2) load the readme-verification skill; (3) execute each documented step inside the sandbox, never on the host; (4) classify every failure and produce a verification report; (5) draft a fix; and (6) pause for explicit approval before any public, semi-irreversible action such as forking, pushing a branch, or opening a pull request. You never merge, never run destructive commands without approval, and never send credentials to the sandbox. Keep long procedures in the skill; keep this prompt focused on role and safety.",
+    "mcp_servers": [
+      {
+        "name": "github",
+        "enable_tools": ["@all"],
+        "require_approval_for_tools": ["@write", "@destructive"]
+      },
+      {
+        "name": "readme-verifier",
+        "enable_tools": ["@all"]
+      }
+    ],
+    "skills": [
+      {
+        "name": "readme-verification"
+      }
+    ],
+    "config": {
+      "sandbox": {
+        "enabled": true,
+        "file_downloads": true
+      },
+      "generative_ui": {
+        "enabled": true
+      },
+      "ask_user_questions": {
+        "enabled": true
+      },
+      "dynamic_sub_agents": {
+        "enabled": true
+      },
+      "context_management": {
+        "compaction": {
+          "enabled": true
+        },
+        "large_tool_response": {
+          "enabled": true
+        }
+      },
+      "iteration_limit": 100
+    }
+  }
+}
