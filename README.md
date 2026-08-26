@@ -28,9 +28,13 @@ module is pure and independently testable:
 `src/types.ts` defines the shared contracts (`Step`, `StepResult`,
 `StepOutcome`, `Verification`, `FailureCategory`).
 
-The `Executor` interface in `src/verify` is the seam where the TrueForge sandbox
-plugs in: in production, the agent's sandbox tool implements
-`Executor.run(step)`. In tests, a fake executor stands in.
+`src/verify` composes the loop (extract → execute → classify → report) behind an
+`Executor` interface, and `src/sandbox` provides a real executor that shells out
+to a command and captures stdout/stderr/exit code with a timeout and tail-capping.
+That pair is the local/test harness that proves the loop end-to-end (see
+`src/sandbox/integration.test.ts`). In production, the agent runs the same loop
+through the harness — the sandbox executes the commands, and the MCP tools carry
+the deterministic logic.
 
 `skills/readme-verification/SKILL.md` is the TrueForge skill pack: the reusable
 methodology the agent loads to do README verification safely
@@ -46,10 +50,13 @@ methodology the agent loads to do README verification safely
 
 ```sh
 npm install
-npm test          # vitest run — full suite, single pass
+npm test            # vitest run — full suite, single pass
+npm run typecheck   # tsc --noEmit
 npm run test:watch  # vitest watch mode
 npm run start:server  # run the MCP server on http://127.0.0.1:8791/mcp
 ```
+
+CI (`.github/workflows/ci.yml`) runs `typecheck` + `test` on every push and PR.
 
 ## The MCP server
 
@@ -92,3 +99,14 @@ this MCP server, the skill, and the sandbox together.
 5. **Subagents** — fan out per documented install path (macOS vs Linux, npm vs pnpm).
 6. **Persistent sessions** — a long verification survives a reload, still holding for approval.
 7. **Skills** — `SKILL.md` is the git-backed instruction pack the agent loads.
+
+## Demo
+
+`docs/DEMO.md` is the 3-minute demo script, mapped beat-by-beat to the judging
+criteria — including the approval-gate moment the hackathon says "nobody films".
+
+## Contributing
+
+Changes land through pull requests, and the Qodo app is installed on the repo so
+each PR gets a repository-aware review (required for the Best Code Quality track).
+
