@@ -13,6 +13,10 @@ export interface StepResult {
   timedOut: boolean;
 }
 
+/**
+ * Produced by `classifyFailure` — except `docs-drift`, which the agent assigns
+ * itself when a command succeeds but its output contradicts the README's claims.
+ */
 export type FailureCategory =
   | 'success'
   | 'missing-dependency'
