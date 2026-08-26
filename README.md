@@ -32,9 +32,9 @@ The `Executor` interface in `src/verify` is the seam where the TrueForge sandbox
 plugs in: in production, the agent's sandbox tool implements
 `Executor.run(step)`. In tests, a fake executor stands in.
 
-`SKILL.md` is the TrueForge skill pack: the reusable methodology the agent loads
-to do README verification safely (interactive-prompt detection, sudo handling,
-timeouts, report format).
+`skills/readme-verification/SKILL.md` is the TrueForge skill pack: the reusable
+methodology the agent loads to do README verification safely
+(interactive-prompt detection, sudo handling, timeouts, report format).
 
 ## Requirements
 
@@ -78,7 +78,7 @@ this MCP server, the skill, and the sandbox together.
    named `readme-verifier`:
    - TrueForge on the host: `http://127.0.0.1:8791/mcp`
    - TrueForge in Docker (Windows bug workaround): `http://host.docker.internal:8791/mcp`
-6. **Add the skill** — Settings → Skills → import `SKILL.md` from this repo.
+6. **Add the skill** — Settings → Skills → import from this repo, folder `skills/readme-verification`.
 7. **Add the sandbox** — Settings → Sandbox providers → Daytona → paste your API key.
 8. **Create the agent** — apply `agents/readme-verifier.json` (or recreate it in the
    UI: pick the model, attach both connectors + the skill, enable the sandbox).
