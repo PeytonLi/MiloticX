@@ -1,0 +1,46 @@
+services:
+  # The harness (standalone mode, persistent disk for SQLite).
+  - type: web
+    name: trueforge
+    runtime: docker
+    dockerfilePath: ./trueforge.Dockerfile
+    plan: free
+    healthCheckPath: /healthz
+    disk:
+      name: trueforge-data
+      mountPath: /root/.local/share/trueforge
+      sizeGB: 1
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production
+
+  # The readme-verifier MCP server (pure tools).
+  - type: web
+    name: readme-verifier-mcp
+    runtime: node
+    plan: free
+    healthCheckPath: /healthz
+    buildCommand: pnpm install --frozen-lockfile
+    startCommand: pnpm run start:server
+    envVars:
+      # `*` disables host validation (Render sets the Host header to the public
+      # domain). For tighter security, list explicit hosts instead:
+      #   readme-verifier-mcp.onrender.com
+      - key: ALLOWED_HOSTS
+        value: '*'
+
+  # The mission-control UI (Next.js).
+  - type: web
+    name: readme-verifier-web
+    runtime: node
+    rootDir: web
+    plan: free
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    envVars:
+      - key: TRUEFORGE_BASE_URL
+        value: https://trueforge.onrender.com
+      - key: TRUEFORGE_AGENT
+        value: readme-verifier
