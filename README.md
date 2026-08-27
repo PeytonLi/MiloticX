@@ -42,21 +42,23 @@ methodology the agent loads to do README verification safely
 
 ## Requirements
 
-- Node.js 22+
+- Node.js 22+ and [pnpm](https://pnpm.io)
 - The deterministic library has no runtime deps. The MCP server uses
-  `@modelcontextprotocol/*`, `@hono/node-server`, and `zod`.
+  `@modelcontextprotocol/*`, `@hono/node-server`, and `zod`. The web UI uses
+  Next.js + React.
 
 ## Development
 
 ```sh
-npm install
-npm test            # vitest run — full suite, single pass
-npm run typecheck   # tsc --noEmit
-npm run test:watch  # vitest watch mode
-npm run start:server  # run the MCP server on http://127.0.0.1:8791/mcp
+pnpm install
+pnpm test            # vitest run — full suite, single pass
+pnpm run typecheck   # tsc --noEmit
+pnpm run test:watch  # vitest watch mode
+pnpm run start:server  # run the MCP server on http://127.0.0.1:8791/mcp
 ```
 
-CI (`.github/workflows/ci.yml`) runs `typecheck` + `test` on every push and PR.
+CI (`.github/workflows/ci.yml`) runs the core `typecheck` + `test` and the web
+`typecheck` + `test` + `build` on every push and PR.
 
 ## The MCP server
 
@@ -75,10 +77,28 @@ Commands still execute in the sandbox — these tools are pure, so nothing runs 
 the host. See `agents/readme-verifier.json` for the agent spec that wires GitHub,
 this MCP server, the skill, and the sandbox together.
 
+## Web UI (mission control)
+
+`web/` is a Next.js + React app that drives the agent through TrueForge's HTTP
+API and shows what it is doing — the Savile Row (Best UI) track. Paste a repo
+URL, and watch the live timeline (tool calls, sandbox, subagents), the approval
+gate with Allow/Deny, and the rendered report.
+
+```sh
+cd web
+pnpm install
+pnpm dev            # http://localhost:3000
+```
+
+It proxies the TrueForge SSE turn stream through `/api/run` and `/api/approve`
+(server-side, so there is no CORS issue), and streams events to the browser. Set
+`TRUEFORGE_BASE_URL` (default `http://localhost:8790`) and `TRUEFORGE_AGENT`
+(default `readme-verifier`) to point at your harness and saved agent.
+
 ## Wiring it into TrueForge
 
 1. **Start the harness** — `npx @truefoundry/trueforge`, open `http://localhost:8790`.
-2. **Start this MCP server** — `npm run start:server` (listens on `127.0.0.1:8791`).
+2. **Start this MCP server** — `pnpm run start:server` (listens on `127.0.0.1:8791`).
 3. **Connect the model** — Settings → Models → add your provider (e.g. DeepSeek).
 4. **Connect GitHub** — Settings → Connectors → add the GitHub MCP server with your PAT.
 5. **Connect this server** — Settings → Connectors → add a custom MCP server by URL,
