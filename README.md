@@ -72,6 +72,13 @@ formatting:
 | `classify_failure` | `exit_code`, `stdout`, `stderr`, `timed_out` | category |
 | `build_report` | `verification_json` | Markdown report |
 | `fingerprint` | `markdown` | hex fingerprint |
+| `ledger_check` | `repo`, `fingerprint` | `{ reverify, record }` |
+| `ledger_record` | `repo`, `fingerprint`, `summary` | `ok` |
+
+`fingerprint` + `ledger_check` + `ledger_record` implement incremental
+verification: an unchanged README is reported as "unchanged since …" instead of
+re-executing. The ledger is a JSON file (default `./ledger.json`, set
+`LEDGER_PATH` to change it).
 
 Commands still execute in the sandbox — these tools are pure, so nothing runs on
 the host. See `agents/readme-verifier.json` for the agent spec that wires GitHub,
@@ -93,7 +100,8 @@ pnpm dev            # http://localhost:3000
 It proxies the TrueForge SSE turn stream through `/api/run` and `/api/approve`
 (server-side, so there is no CORS issue), and streams events to the browser. Set
 `TRUEFORGE_BASE_URL` (default `http://localhost:8790`) and `TRUEFORGE_AGENT`
-(default `readme-verifier`) to point at your harness and saved agent.
+(default `readme-verifier`) to point at your harness and saved agent. The session
+and timeline persist to `localStorage`, so the view survives a page reload.
 
 ## Wiring it into TrueForge
 

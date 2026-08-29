@@ -109,6 +109,12 @@ body {
   cursor: not-allowed;
 }
 
+.btn.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
 .btn.danger {
   background: transparent;
   color: var(--danger);
