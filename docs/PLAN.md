@@ -57,7 +57,7 @@
 ## 2. Repo layout
 
 ```
-readme-verifier/
+MiloticX/
   SKILL.md            # methodology pack (loaded as a TrueForge skill)
   agents/             # agent definition: model + connectors + skills + instructions
   src/                # ledger, report templates, failure classifiers (TypeScript)

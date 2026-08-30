@@ -17,7 +17,7 @@ one that explains it.
 
 ## 2. Product
 
-README Verifier is an agent, not a chat wrapper. Given a public GitHub repo URL, it:
+MiloticX is an agent, not a chat wrapper. Given a public GitHub repo URL, it:
 
 1. Reads the README via a GitHub MCP connector and extracts the setup steps.
 2. Provisions an isolated **Daytona sandbox** and clones the repo into it.
