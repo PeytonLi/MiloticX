@@ -122,15 +122,15 @@ describe('eventToTimelineItem', () => {
     expect(item?.title).toBe('Finished');
   });
 
-  it('maps terminal turn.done with leftover requiredActions as Finished', () => {
+  it('maps turn.done status done with requiredActions as a pause, not Finished', () => {
     const item = eventToTimelineItem({
       type: 'turn.done',
       id: '10',
       threadId: 'main',
       state: { status: 'done', requiredActions: [{ id: 'tc-9' }] },
     });
-    expect(item?.kind).toBe('turn-end');
-    expect(item?.title).toBe('Finished');
+    expect(item?.kind).toBe('approval');
+    expect(item?.title).toMatch(/approval/i);
   });
 
   it('returns null for unknown events', () => {
@@ -312,7 +312,62 @@ describe('pendingFromEvents', () => {
     expect(pendingFromEvents(events, ['tc-9'])).toEqual([]);
   });
 
-  for (const status of ['done', 'cancelled', 'error'] as const) {
+  it('clears when the first turn.done is explicitly done with no required actions', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      ['done', { type: 'turn.done', id: 'done', threadId: 'main', state: { status: 'done' } }],
+    ]);
+    expect(pendingFromEvents(events)).toEqual([]);
+  });
+
+  it('keeps the gate when TrueForge closes the pause as status done with required_actions', () => {
+    const doneEvent = {
+      type: 'turn.done',
+      id: 'done',
+      thread_id: 'main',
+      state: {
+        status: 'done',
+        output: null,
+        required_actions: [
+          {
+            type: 'tool.approval_required',
+            tool_calls: [{ id: 'tc-9', source_event_id: 'msg-1' }],
+          },
+        ],
+      },
+    };
+    expect(isPausedTurnDone(doneEvent)).toBe(true);
+    const events = new Map<string, any>([
+      [
+        'msg-1',
+        {
+          type: 'model.message',
+          id: 'msg-1',
+          thread_id: 'main',
+          tool_calls: [{ id: 'tc-9', function: { name: 'create_branch', arguments: '{"branch":"fix"}' } }],
+        },
+      ],
+      [
+        'appr',
+        {
+          type: 'tool.approval_required',
+          thread_id: 'main',
+          tool_calls: [{ id: 'tc-9', source_event_id: 'msg-1' }],
+        },
+      ],
+      ['done', doneEvent],
+    ]);
+    const pending = pendingFromEvents(events);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.toolName).toBe('create_branch');
+    expect(pending[0]?.sourceEventId).toBe('msg-1');
+  });
+
+  for (const status of ['cancelled', 'error'] as const) {
     it(`clears when the first turn.done is explicitly ${status}`, () => {
       const events = new Map<string, any>([
         msg,

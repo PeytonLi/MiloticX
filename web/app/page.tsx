@@ -11,7 +11,6 @@ import {
   buildApprovalInputs,
   deriveRunStatus,
   eventToTimelineItem,
-  extractApprovals,
   finalReport,
   isDeltaEvent,
   isPausedTurnDone,
@@ -104,8 +103,10 @@ export default function Page() {
       indexRef.current.set(event.id, event);
       orderRef.current.push(event.id);
     }
-    if (event.type === 'tool.approval_required') {
-      setPending(extractApprovals(event, indexRef.current));
+    if (event.type === 'tool.approval_required' || isPausedTurnDone(event)) {
+      // Rebuild from the full event index so snake_case / nested required_actions
+      // and id-only refs still produce Allow/Deny buttons.
+      setPending(pendingFromEvents(indexRef.current, resolvedRef.current));
     }
     if (event.type === 'turn.done') {
       if (!isPausedTurnDone(event)) {

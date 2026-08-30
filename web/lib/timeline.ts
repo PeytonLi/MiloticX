@@ -66,7 +66,26 @@ export function humanToolLabel(name: string): string {
 }
 
 function toolCallName(call: AnyEvent | undefined): string {
-  return call?.function?.name ?? call?.toolInfo?.name ?? 'tool';
+  return call?.function?.name ?? call?.toolInfo?.name ?? call?.name ?? 'tool';
+}
+
+function getThreadId(event: AnyEvent | undefined): string {
+  return event?.threadId ?? event?.thread_id ?? 'main';
+}
+
+function getToolCalls(event: AnyEvent | undefined): AnyEvent[] {
+  const calls = event?.toolCalls ?? event?.tool_calls;
+  return Array.isArray(calls) ? calls : [];
+}
+
+function refToolCallId(ref: AnyEvent | undefined): string | undefined {
+  const id = ref?.id ?? ref?.toolCallId ?? ref?.tool_call_id;
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
+}
+
+function refSourceEventId(ref: AnyEvent | undefined): string | undefined {
+  const id = ref?.sourceEventId ?? ref?.source_event_id;
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
 }
 
 function toolCallArgs(call: AnyEvent | undefined): string {
@@ -112,7 +131,7 @@ export function eventToTimelineItem(event: AnyEvent): TimelineItem | null {
       };
     case 'model.message': {
       const content = event?.content ?? '';
-      const calls = event?.toolCalls ?? [];
+      const calls = getToolCalls(event);
       if (calls.length > 0) {
         const names = calls.map((c: AnyEvent) => toolCallName(c));
         const labels = names.map(humanToolLabel).join('; ');
@@ -205,44 +224,70 @@ function isWaitingStatus(status: unknown): boolean {
   );
 }
 
-function isCompletedStatus(status: unknown): boolean {
-  return status === 'done' || status === 'completed' || status === 'cancelled' || status === 'error';
+/** Hard-fail / cancel — not a pause. Note: TrueForge pauses still use status "done". */
+function isHardTerminalStatus(status: unknown): boolean {
+  return status === 'cancelled' || status === 'error';
 }
 
+function isFinishedStatus(status: unknown): boolean {
+  return status === 'done' || status === 'completed';
+}
+
+function normalizeRef(ref: AnyEvent): AnyEvent | null {
+  const id = refToolCallId(ref);
+  if (!id) return null;
+  return { id, sourceEventId: refSourceEventId(ref) };
+}
+
+/**
+ * TrueForge nests pending approvals as full events under required_actions,
+ * or as flat { id, source_event_id } refs. Support both, camelCase and snake_case.
+ */
 function normalizeRequiredActions(event: AnyEvent): AnyEvent[] {
   const raw = event?.state?.requiredActions ?? event?.state?.required_actions ?? [];
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((a: AnyEvent) => ({
-      id: a?.id ?? a?.toolCallId,
-      sourceEventId: a?.sourceEventId,
-    }))
-    .filter((a: AnyEvent) => typeof a.id === 'string' && a.id.length > 0);
+  const refs: AnyEvent[] = [];
+  for (const item of raw) {
+    const nested = getToolCalls(item);
+    if (nested.length > 0) {
+      for (const call of nested) {
+        const ref = normalizeRef(call);
+        if (ref) refs.push(ref);
+      }
+      continue;
+    }
+    const ref = normalizeRef(item);
+    if (ref) refs.push(ref);
+  }
+  return refs;
 }
 
 function refsByToolCallId(toolCalls: AnyEvent[] | undefined): Map<string, AnyEvent> {
   const map = new Map<string, AnyEvent>();
   for (const ref of toolCalls ?? []) {
-    const id = ref?.id ?? ref?.toolCallId;
-    if (typeof id !== 'string' || !id) continue;
-    map.set(id, { id, sourceEventId: ref?.sourceEventId });
+    const normalized = normalizeRef(ref);
+    if (!normalized) continue;
+    map.set(normalized.id as string, normalized);
   }
   return map;
 }
 
 /** Keep sourceEventId from the last approval_required when turn.done only sends the tool-call id. */
 function mergeApprovalRefs(previous: AnyEvent | null, incoming: AnyEvent[]): AnyEvent[] {
-  const prior = refsByToolCallId(previous?.toolCalls);
+  const prior = refsByToolCallId(getToolCalls(previous ?? undefined));
   return incoming.map((a) => ({
     id: a.id,
     sourceEventId: a.sourceEventId ?? prior.get(a.id)?.sourceEventId,
   }));
 }
 
-/** TrueForge closes a paused approval stream with turn.done; that is not a resolution. */
+/**
+ * TrueForge closes a paused approval stream with turn.done status "done"
+ * and required_actions populated (output is null). That is a pause, not Finished.
+ */
 export function isPausedTurnDone(event: AnyEvent): boolean {
   if (event?.type !== 'turn.done') return false;
-  if (isCompletedStatus(event?.state?.status)) return false;
+  if (isHardTerminalStatus(event?.state?.status)) return false;
   if (normalizeRequiredActions(event).length > 0) return true;
   return isWaitingStatus(event?.state?.status);
 }
@@ -254,8 +299,8 @@ function asApprovalEvent(threadId: string, toolCalls: AnyEvent[]): AnyEvent {
 /**
  * Rebuild pending approvals from stored events (page reload mid-gate).
  * A paused turn.done does not clear the gate. Only a matching allow/deny
- * (`user.tool_approval` or snapshot `resolvedToolCallIds`) or a later completed
- * turn does.
+ * (`user.tool_approval` or snapshot `resolvedToolCallIds`) or a later finished
+ * turn with no required actions does.
  */
 export function pendingFromEvents(
   events: Map<string, AnyEvent>,
@@ -267,16 +312,22 @@ export function pendingFromEvents(
 
   for (const event of events.values()) {
     if (event?.type === 'tool.approval_required') {
-      latest = event;
+      latest = {
+        type: 'tool.approval_required',
+        threadId: getThreadId(event),
+        toolCalls: getToolCalls(event)
+          .map(normalizeRef)
+          .filter((ref): ref is AnyEvent => ref !== null),
+      };
       pauseClosed = false;
     }
-    if (event?.type === 'user.tool_approval' && typeof event.toolCallId === 'string') {
-      resolved.add(event.toolCallId);
+    if (event?.type === 'user.tool_approval') {
+      const id = event.toolCallId ?? event.tool_call_id;
+      if (typeof id === 'string') resolved.add(id);
     }
     if (event?.type !== 'turn.done') continue;
 
-    // Terminal status wins over leftover/diagnostic requiredActions.
-    if (isCompletedStatus(event?.state?.status)) {
+    if (isHardTerminalStatus(event?.state?.status)) {
       latest = null;
       pauseClosed = false;
       continue;
@@ -285,7 +336,7 @@ export function pendingFromEvents(
     const actions = normalizeRequiredActions(event);
     if (actions.length > 0) {
       latest = asApprovalEvent(
-        event.threadId ?? latest?.threadId ?? 'main',
+        getThreadId(event) || getThreadId(latest ?? undefined),
         mergeApprovalRefs(latest, actions),
       );
       pauseClosed = true;
@@ -296,6 +347,13 @@ export function pendingFromEvents(
       continue;
     }
     if (!latest) continue;
+
+    // Finished with no required actions resolves the gate.
+    if (isFinishedStatus(event?.state?.status)) {
+      latest = null;
+      pauseClosed = false;
+      continue;
+    }
 
     const open = extractApprovals(latest, events).filter((p) => !resolved.has(p.toolCallId));
     // Status-less first stream close after an unresolved approval is the pause.
@@ -317,20 +375,21 @@ export function extractApprovals(
   approvalEvent: AnyEvent,
   events: Map<string, AnyEvent>,
 ): PendingApproval[] {
-  const threadId = approvalEvent?.threadId ?? 'main';
+  const threadId = getThreadId(approvalEvent);
   const result: PendingApproval[] = [];
-  for (const ref of approvalEvent?.toolCalls ?? []) {
-    const toolCallId = ref?.id ?? ref?.toolCallId;
-    if (typeof toolCallId !== 'string' || !toolCallId) continue;
-    let source = events.get(ref?.sourceEventId);
+  for (const ref of getToolCalls(approvalEvent)) {
+    const toolCallId = refToolCallId(ref);
+    if (!toolCallId) continue;
+    const sourceEventId = refSourceEventId(ref);
+    let source = sourceEventId ? events.get(sourceEventId) : undefined;
     let call =
       source?.type === 'model.message'
-        ? (source.toolCalls ?? []).find((c: AnyEvent) => c.id === toolCallId)
+        ? getToolCalls(source).find((c: AnyEvent) => c.id === toolCallId)
         : undefined;
     if (!call) {
       for (const event of events.values()) {
         if (event?.type !== 'model.message') continue;
-        call = (event.toolCalls ?? []).find((c: AnyEvent) => c.id === toolCallId);
+        call = getToolCalls(event).find((c: AnyEvent) => c.id === toolCallId);
         if (call) {
           source = event;
           break;
@@ -343,7 +402,7 @@ export function extractApprovals(
       toolCallId,
       toolName: toolCallName(call),
       arguments: toolCallArgs(call),
-      sourceEventId: ref?.sourceEventId ?? source?.id,
+      sourceEventId: sourceEventId ?? source?.id ?? '',
     });
   }
   return result;
