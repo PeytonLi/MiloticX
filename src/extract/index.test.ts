@@ -48,6 +48,13 @@ describe('extractSteps', () => {
     ]);
   });
 
+  it('extracts inline node and gh commands', () => {
+    expect(extractSteps('Run `node --version` then `gh pr list`.')).toEqual([
+      { id: 1, kind: 'inline', content: 'node --version', line: 1 },
+      { id: 2, kind: 'inline', content: 'gh pr list', line: 1 },
+    ]);
+  });
+
   it('assigns sequential ids in document order', () => {
     const md = 'First `git clone x`\n```sh\nnpm install\n```\nThen `yarn test`.';
     expect(extractSteps(md)).toEqual([
