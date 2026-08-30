@@ -12,7 +12,7 @@ import {
   deriveRunStatus,
   eventToTimelineItem,
   finalReport,
-  isDeltaEvent,
+  ingestStreamEvent,
   isPausedTurnDone,
   pendingFromEvents,
   type PendingApproval,
@@ -96,16 +96,11 @@ export default function Page() {
       setRunning(false);
       return;
     }
-    if (isDeltaEvent(event)) {
-      const base = indexRef.current.get(event.id);
-      if (base) base.content = (base.content ?? '') + (event.content ?? '');
-    } else {
-      indexRef.current.set(event.id, event);
-      orderRef.current.push(event.id);
-    }
+    // Merge model.message.delta tool-call chunks into the base message.
+    // Without this, extractApprovals cannot resolve the gated tool and the
+    // Allow/Deny card never appears (timeline still shows "Paused").
+    ingestStreamEvent(indexRef.current, orderRef.current, event);
     if (event.type === 'tool.approval_required' || isPausedTurnDone(event)) {
-      // Rebuild from the full event index so snake_case / nested required_actions
-      // and id-only refs still produce Allow/Deny buttons.
       setPending(pendingFromEvents(indexRef.current, resolvedRef.current));
     }
     if (event.type === 'turn.done') {

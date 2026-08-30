@@ -98,7 +98,103 @@ function truncate(text: string, max = 400): string {
 }
 
 export function isDeltaEvent(event: AnyEvent): boolean {
-  return typeof event?.type === 'string' && event.type.endsWith('.delta');
+  return event?.type === 'model.message.delta';
+}
+
+/**
+ * Fold a streaming model.message.delta into its base model.message (same id).
+ * Mirrors @truefoundry/trueforge-sdk mergeEventDelta — without this, toolCalls
+ * never assemble and the approval gate has nothing to show.
+ */
+export function mergeEventDelta(base: AnyEvent, delta: AnyEvent): void {
+  if (base?.type !== 'model.message' || !delta || base.id !== delta.id) return;
+
+  if (typeof delta.content === 'string' && delta.content.length > 0) {
+    if (base.content == null || typeof base.content === 'string') {
+      base.content = `${base.content ?? ''}${delta.content}`;
+    }
+  }
+  const reasoning = delta.reasoningContent ?? delta.reasoning_content;
+  if (typeof reasoning === 'string' && reasoning.length > 0) {
+    base.reasoningContent = `${base.reasoningContent ?? base.reasoning_content ?? ''}${reasoning}`;
+  }
+  if (delta.refusal !== undefined) base.refusal = delta.refusal;
+  if (delta.finishReason !== undefined) base.finishReason = delta.finishReason;
+  if (delta.finish_reason !== undefined) base.finishReason = delta.finish_reason;
+  if (delta.usage !== undefined) base.usage = delta.usage;
+
+  const chunks = delta.toolCalls ?? delta.tool_calls;
+  if (!Array.isArray(chunks) || chunks.length === 0) return;
+  if (!Array.isArray(base.toolCalls)) base.toolCalls = [];
+  for (const chunk of chunks) mergeToolCallDelta(base.toolCalls, chunk);
+}
+
+function mergeToolCallDelta(toolCalls: AnyEvent[], chunk: AnyEvent): void {
+  const index = chunk?.index;
+  if (typeof index !== 'number') return;
+  const existing = toolCalls[index];
+  if (existing) {
+    if (chunk.id !== undefined) existing.id = chunk.id;
+    if (chunk.toolInfo !== undefined) existing.toolInfo = chunk.toolInfo;
+    if (chunk.tool_info !== undefined) existing.toolInfo = chunk.tool_info;
+    if (chunk.providerSpecificFields !== undefined) {
+      existing.providerSpecificFields = chunk.providerSpecificFields;
+    }
+    if (chunk.function !== undefined) {
+      existing.function = existing.function ?? { name: '', arguments: '' };
+      if (chunk.function.name !== undefined) existing.function.name = chunk.function.name;
+      if (chunk.function.arguments !== undefined) {
+        existing.function.arguments = `${existing.function.arguments ?? ''}${chunk.function.arguments}`;
+      }
+    }
+    return;
+  }
+  // Streaming tool calls arrive in index order; ignore sparse slots.
+  if (index !== toolCalls.length) return;
+  const id = chunk.id;
+  const name = chunk.function?.name;
+  const toolInfo = chunk.toolInfo ?? chunk.tool_info;
+  if (id === undefined || name === undefined || toolInfo === undefined) return;
+  const created: AnyEvent = {
+    id,
+    type: 'function',
+    function: { name, arguments: chunk.function?.arguments ?? '' },
+    toolInfo,
+  };
+  if (chunk.providerSpecificFields !== undefined) {
+    created.providerSpecificFields = chunk.providerSpecificFields;
+  }
+  toolCalls.push(created);
+}
+
+/** Apply a stream event into the id-keyed index (delta-merge or insert). */
+export function ingestStreamEvent(
+  events: Map<string, AnyEvent>,
+  order: string[],
+  event: AnyEvent,
+): void {
+  if (isDeltaEvent(event)) {
+    const id = event.id;
+    if (typeof id !== 'string' || !id) return;
+    let base = events.get(id);
+    if (!base) {
+      base = {
+        type: 'model.message',
+        id,
+        threadId: event.threadId ?? event.thread_id ?? 'main',
+        content: '',
+        toolCalls: [],
+      };
+      events.set(id, base);
+      order.push(id);
+    }
+    mergeEventDelta(base, event);
+    return;
+  }
+  const id = typeof event.id === 'string' && event.id ? event.id : `${event.type}-${order.length}`;
+  if (!event.id) event.id = id;
+  if (!events.has(id)) order.push(id);
+  events.set(id, event);
 }
 
 export function eventToTimelineItem(event: AnyEvent): TimelineItem | null {
@@ -396,7 +492,17 @@ export function extractApprovals(
         }
       }
     }
-    if (!call) continue;
+    if (!call) {
+      // Still show the gate — approve only needs toolCallId + threadId.
+      result.push({
+        threadId,
+        toolCallId,
+        toolName: 'tool',
+        arguments: '',
+        sourceEventId: sourceEventId ?? '',
+      });
+      continue;
+    }
     result.push({
       threadId,
       toolCallId,

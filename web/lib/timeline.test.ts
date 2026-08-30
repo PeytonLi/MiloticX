@@ -7,9 +7,11 @@ import {
   extractApprovals,
   finalReport,
   humanToolLabel,
+  ingestStreamEvent,
   isDeltaEvent,
   isIrreversibleTool,
   isPausedTurnDone,
+  mergeEventDelta,
   pendingFromEvents,
 } from './timeline';
 
@@ -20,6 +22,78 @@ describe('isDeltaEvent', () => {
   it('is false for non-delta types', () => {
     expect(isDeltaEvent({ type: 'model.message' })).toBe(false);
     expect(isDeltaEvent({})).toBe(false);
+  });
+});
+
+describe('mergeEventDelta / ingestStreamEvent', () => {
+  it('assembles toolCalls from streaming deltas so approvals can resolve', () => {
+    const events = new Map<string, any>();
+    const order: string[] = [];
+    ingestStreamEvent(events, order, {
+      type: 'model.message',
+      id: 'msg-1',
+      threadId: 'main',
+      content: '',
+    });
+    ingestStreamEvent(events, order, {
+      type: 'model.message.delta',
+      id: 'msg-1',
+      toolCalls: [
+        {
+          index: 0,
+          id: 'tc-9',
+          function: { name: 'create_branch', arguments: '{"branch":"' },
+          toolInfo: { type: 'mcp', name: 'create_branch', server_name: 'github' },
+        },
+      ],
+    });
+    ingestStreamEvent(events, order, {
+      type: 'model.message.delta',
+      id: 'msg-1',
+      toolCalls: [{ index: 0, function: { arguments: 'fix"}' } }],
+    });
+    ingestStreamEvent(events, order, {
+      type: 'tool.approval_required',
+      id: 'appr',
+      threadId: 'main',
+      toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }],
+    });
+
+    const base = events.get('msg-1');
+    expect(base?.toolCalls?.[0]?.function?.name).toBe('create_branch');
+    expect(base?.toolCalls?.[0]?.function?.arguments).toBe('{"branch":"fix"}');
+    const pending = pendingFromEvents(events);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.toolName).toBe('create_branch');
+    expect(pending[0]?.arguments).toContain('fix');
+  });
+
+  it('creates a base message when the first event is a delta', () => {
+    const events = new Map<string, any>();
+    const order: string[] = [];
+    ingestStreamEvent(events, order, {
+      type: 'model.message.delta',
+      id: 'msg-2',
+      threadId: 'main',
+      content: 'hi',
+      toolCalls: [
+        {
+          index: 0,
+          id: 'tc-1',
+          function: { name: 'push_files', arguments: '{}' },
+          toolInfo: { type: 'mcp', name: 'push_files' },
+        },
+      ],
+    });
+    expect(events.get('msg-2')?.type).toBe('model.message');
+    expect(events.get('msg-2')?.content).toBe('hi');
+    expect(events.get('msg-2')?.toolCalls?.[0]?.id).toBe('tc-1');
+  });
+
+  it('mergeEventDelta no-ops on id mismatch', () => {
+    const base = { type: 'model.message', id: 'a', content: 'x', toolCalls: [] };
+    mergeEventDelta(base, { type: 'model.message.delta', id: 'b', content: 'y' });
+    expect(base.content).toBe('x');
   });
 });
 
@@ -161,12 +235,14 @@ describe('extractApprovals', () => {
     expect(approvals[0]?.arguments).toContain('repo');
   });
 
-  it('skips refs whose source event is missing', () => {
+  it('still returns a gate stub when the source message is missing', () => {
     const approvals = extractApprovals(
       { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-x', sourceEventId: 'gone' }] },
       new Map(),
     );
-    expect(approvals).toHaveLength(0);
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]?.toolCallId).toBe('tc-x');
+    expect(approvals[0]?.toolName).toBe('tool');
   });
 });
 
