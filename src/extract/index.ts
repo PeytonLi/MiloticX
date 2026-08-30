@@ -11,7 +11,7 @@ const NON_SHELL_LANGS = new Set([
 ]);
 
 const COMMAND_PREFIX_RE =
-  /^(?:npm|npx|yarn|pnpm|git|docker|pip3|pip|python|go|cargo|brew|apt|curl|wget|make)\b/;
+  /^(?:npm|npx|yarn|pnpm|git|docker|pip3|pip|python|go|cargo|brew|apt|curl|wget|make|node|gh|bun|deno)\b/;
 
 function isCommandText(text: string): boolean {
   const trimmed = text.trimStart();
