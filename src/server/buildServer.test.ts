@@ -6,7 +6,7 @@ import { buildServer } from './buildServer.js';
 let client: Client;
 
 beforeAll(async () => {
-  const handler = createMcpHandler(buildServer);
+  const handler = createMcpHandler(() => buildServer());
   const transport = new StreamableHTTPClientTransport(new URL('http://test.local/mcp'), {
     fetch: (url, init) => handler.fetch(new Request(url, init)),
   });
@@ -52,15 +52,9 @@ describe('readme-verifier MCP server', () => {
   });
 
   it('renders a report containing the repo name', async () => {
-    const verification = JSON.stringify({
-      repo: 'owner/demo',
-      outcomes: [],
-      startedAt: '2026-08-25T00:00:00.000Z',
-      finishedAt: '2026-08-25T00:00:01.000Z',
-    });
     const result = await client.callTool({
       name: 'build_report',
-      arguments: { verification_json: verification },
+      arguments: { repo: 'owner/demo', outcomes: [] },
     });
     expect(textOf(result as { content: unknown[] })).toContain('owner/demo');
   });

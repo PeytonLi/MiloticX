@@ -21,6 +21,8 @@ execute a repo's documented setup steps safely and report what broke.
   - `classify_failure(exit_code, stdout, stderr, timed_out)` → failure category
   - `build_report(verification_json)` → deterministic Markdown report
   - `fingerprint(markdown)` → hex fingerprint for incremental verification
+  - `ledger_check(repo, fingerprint)` → `{ reverify, record }`
+  - `ledger_record(repo, fingerprint, summary)` → records a completed run
 - the **sandbox** — run commands, clone repos, write files (never the host)
 - the **github** MCP server — read the README, fork, push, open PRs
 
@@ -82,5 +84,8 @@ includes: the repo, a status table, a pass/fail summary, a Failures section, and
 
 ## Incremental verification
 
-Use the `fingerprint` tool to hash a README. If a previous run stored the same
-fingerprint, report "unchanged since <date>" instead of re-executing every step.
+Before running anything, use the `fingerprint` tool to hash the README, then call
+`ledger_check(repo, fingerprint)`. If it returns `reverify: false`, the README is
+unchanged since the last run — report the stored summary as "unchanged since
+<record.verifiedAt>" and skip re-execution. Otherwise verify as usual and finish
+with `ledger_record(repo, fingerprint, "<summary>")` so the next run can skip.

@@ -3,3 +3,4 @@ dist/
 .env
 *.sqlite
 *.sqlite3
+ledger.json

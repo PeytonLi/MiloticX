@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { parseSnapshot, serializeSnapshot, STORAGE_KEY } from '../lib/persist';
 import { readSse } from '../lib/sse';
 import {
   buildApprovalInputs,
@@ -21,11 +22,38 @@ export default function Page() {
   const [pending, setPending] = useState<PendingApproval[]>([]);
   const [report, setReport] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
 
   const indexRef = useRef(new Map<string, AnyEvent>());
   const orderRef = useRef<string[]>([]);
   const bump = () => setTick((t) => t + 1);
+
+  useEffect(() => {
+    const snap = parseSnapshot(localStorage.getItem(STORAGE_KEY));
+    if (snap) {
+      setRepo(snap.repo);
+      setReport(snap.report);
+      setSessionId(snap.sessionId);
+      indexRef.current = new Map(snap.events) as Map<string, AnyEvent>;
+      orderRef.current = snap.order;
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(
+      STORAGE_KEY,
+      serializeSnapshot({
+        sessionId,
+        repo,
+        report,
+        order: orderRef.current,
+        events: [...indexRef.current.entries()],
+      }),
+    );
+  }, [hydrated, tick, sessionId, repo, report]);
 
   const timeline: TimelineItem[] = orderRef.current
     .map((id) => indexRef.current.get(id))
@@ -117,6 +145,18 @@ export default function Page() {
     }
   }
 
+  function reset() {
+    setRepo('');
+    setReport(null);
+    setSessionId(null);
+    setPending([]);
+    setError(null);
+    indexRef.current = new Map();
+    orderRef.current = [];
+    localStorage.removeItem(STORAGE_KEY);
+    bump();
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -139,6 +179,9 @@ export default function Page() {
         />
         <button className="btn" onClick={run} disabled={running || !repo.trim()}>
           {running ? 'Verifying…' : 'Verify README'}
+        </button>
+        <button className="btn ghost" onClick={reset} disabled={running}>
+          Reset
         </button>
       </section>
 
