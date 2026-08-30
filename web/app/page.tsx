@@ -14,6 +14,7 @@ import {
   extractApprovals,
   finalReport,
   isDeltaEvent,
+  isPausedTurnDone,
   pendingFromEvents,
   type PendingApproval,
   type TimelineItem,
@@ -33,7 +34,22 @@ export default function Page() {
 
   const indexRef = useRef(new Map<string, AnyEvent>());
   const orderRef = useRef<string[]>([]);
+  const resolvedRef = useRef<string[]>([]);
   const bump = () => setTick((t) => t + 1);
+
+  function persistSnapshot() {
+    localStorage.setItem(
+      STORAGE_KEY,
+      serializeSnapshot({
+        sessionId,
+        repo,
+        report,
+        order: orderRef.current,
+        events: [...indexRef.current.entries()],
+        resolvedToolCallIds: resolvedRef.current,
+      }),
+    );
+  }
 
   useEffect(() => {
     const snap = parseSnapshot(localStorage.getItem(STORAGE_KEY));
@@ -43,23 +59,19 @@ export default function Page() {
       setSessionId(snap.sessionId);
       indexRef.current = new Map(snap.events) as Map<string, AnyEvent>;
       orderRef.current = snap.order;
-      setPending(pendingFromEvents(indexRef.current));
+      resolvedRef.current = snap.resolvedToolCallIds ?? [];
+      const restored = pendingFromEvents(indexRef.current, resolvedRef.current);
+      setPending(restored);
+      if (restored.length > 0) {
+        setReport(null);
+      }
     }
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(
-      STORAGE_KEY,
-      serializeSnapshot({
-        sessionId,
-        repo,
-        report,
-        order: orderRef.current,
-        events: [...indexRef.current.entries()],
-      }),
-    );
+    persistSnapshot();
   }, [hydrated, tick, sessionId, repo, report]);
 
   const timeline: TimelineItem[] = orderRef.current
@@ -96,8 +108,10 @@ export default function Page() {
       setPending(extractApprovals(event, indexRef.current));
     }
     if (event.type === 'turn.done') {
-      const r = finalReport(indexRef.current);
-      if (r) setReport(r);
+      if (!isPausedTurnDone(event)) {
+        const r = finalReport(indexRef.current);
+        if (r) setReport(r);
+      }
       setRunning(false);
     }
     bump();
@@ -112,6 +126,7 @@ export default function Page() {
     setSessionId(null);
     indexRef.current = new Map();
     orderRef.current = [];
+    resolvedRef.current = [];
     bump();
 
     try {
@@ -136,9 +151,17 @@ export default function Page() {
   async function approve(decision: 'allow' | 'deny') {
     if (!sessionId || pending.length === 0) return;
     const inputs = buildApprovalInputs(pending, decision);
+    resolvedRef.current = [...new Set([...resolvedRef.current, ...pending.map((p) => p.toolCallId)])];
+    for (const input of inputs) {
+      const id = `user-approval:${input.toolCallId}`;
+      indexRef.current.set(id, input);
+      orderRef.current.push(id);
+    }
     setPending([]);
     setRunning(true);
     setError(null);
+    persistSnapshot();
+    bump();
     try {
       const res = await fetch('/api/approve', {
         method: 'POST',
@@ -166,6 +189,7 @@ export default function Page() {
     setError(null);
     indexRef.current = new Map();
     orderRef.current = [];
+    resolvedRef.current = [];
     localStorage.removeItem(STORAGE_KEY);
     bump();
   }
