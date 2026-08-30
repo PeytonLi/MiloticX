@@ -242,6 +242,7 @@ function mergeApprovalRefs(previous: AnyEvent | null, incoming: AnyEvent[]): Any
 /** TrueForge closes a paused approval stream with turn.done; that is not a resolution. */
 export function isPausedTurnDone(event: AnyEvent): boolean {
   if (event?.type !== 'turn.done') return false;
+  if (isCompletedStatus(event?.state?.status)) return false;
   if (normalizeRequiredActions(event).length > 0) return true;
   return isWaitingStatus(event?.state?.status);
 }
@@ -274,6 +275,13 @@ export function pendingFromEvents(
     }
     if (event?.type !== 'turn.done') continue;
 
+    // Terminal status wins over leftover/diagnostic requiredActions.
+    if (isCompletedStatus(event?.state?.status)) {
+      latest = null;
+      pauseClosed = false;
+      continue;
+    }
+
     const actions = normalizeRequiredActions(event);
     if (actions.length > 0) {
       latest = asApprovalEvent(
@@ -288,13 +296,6 @@ export function pendingFromEvents(
       continue;
     }
     if (!latest) continue;
-
-    // Explicit terminal statuses resolve the gate before any first-close fallback.
-    if (isCompletedStatus(event?.state?.status)) {
-      latest = null;
-      pauseClosed = false;
-      continue;
-    }
 
     const open = extractApprovals(latest, events).filter((p) => !resolved.has(p.toolCallId));
     // Status-less first stream close after an unresolved approval is the pause.

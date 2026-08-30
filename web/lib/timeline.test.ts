@@ -122,6 +122,17 @@ describe('eventToTimelineItem', () => {
     expect(item?.title).toBe('Finished');
   });
 
+  it('maps terminal turn.done with leftover requiredActions as Finished', () => {
+    const item = eventToTimelineItem({
+      type: 'turn.done',
+      id: '10',
+      threadId: 'main',
+      state: { status: 'done', requiredActions: [{ id: 'tc-9' }] },
+    });
+    expect(item?.kind).toBe('turn-end');
+    expect(item?.title).toBe('Finished');
+  });
+
   it('returns null for unknown events', () => {
     expect(eventToTimelineItem({ type: 'weird.event', id: '11' })).toBeNull();
   });
@@ -310,6 +321,25 @@ describe('pendingFromEvents', () => {
           { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
         ],
         ['done', { type: 'turn.done', id: 'done', threadId: 'main', state: { status } }],
+      ]);
+      expect(pendingFromEvents(events)).toEqual([]);
+    });
+
+    it(`clears ${status} even when requiredActions is still populated`, () => {
+      const doneEvent = {
+        type: 'turn.done',
+        id: 'done',
+        threadId: 'main',
+        state: { status, requiredActions: [{ id: 'tc-9' }] },
+      };
+      expect(isPausedTurnDone(doneEvent)).toBe(false);
+      const events = new Map<string, any>([
+        msg,
+        [
+          'appr',
+          { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+        ],
+        ['done', doneEvent],
       ]);
       expect(pendingFromEvents(events)).toEqual([]);
     });
