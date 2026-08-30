@@ -39,10 +39,9 @@ body {
   margin: 0;
   color: var(--text);
   font-family: var(--font-sans), system-ui, sans-serif;
-  background:
-    radial-gradient(900px 540px at 86% -14%, rgba(46, 196, 157, 0.13), transparent 62%),
-    radial-gradient(700px 500px at -10% 20%, rgba(241, 184, 91, 0.06), transparent 68%),
-    var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg);
 }
 
 body::before {
@@ -127,7 +126,6 @@ summary:focus-visible {
   border: 1px solid rgba(89, 225, 189, 0.5);
   border-radius: 7px;
   background: rgba(89, 225, 189, 0.08);
-  box-shadow: 0 0 22px rgba(89, 225, 189, 0.16);
 }
 
 .mark::before,
@@ -210,7 +208,6 @@ summary:focus-visible {
   height: 6px;
   border-radius: 50%;
   background: var(--aqua);
-  box-shadow: 0 0 10px rgba(89, 225, 189, 0.65);
 }
 
 /* Status control surface */
@@ -225,9 +222,6 @@ summary:focus-visible {
   background:
     linear-gradient(140deg, rgba(255, 255, 255, 0.025), transparent 52%),
     var(--surface);
-  box-shadow:
-    0 26px 70px rgba(0, 0, 0, 0.26),
-    inset 0 1px rgba(255, 255, 255, 0.025);
 }
 
 .status-atmosphere {
@@ -239,22 +233,7 @@ summary:focus-visible {
 }
 
 .status-atmosphere::before {
-  position: absolute;
-  top: -170px;
-  left: -120px;
-  width: 520px;
-  height: 400px;
-  content: '';
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(89, 225, 189, 0.095), transparent 68%);
-}
-
-.phase-waiting .status-atmosphere::before {
-  background: radial-gradient(circle, rgba(241, 184, 91, 0.12), transparent 68%);
-}
-
-.phase-done .status-atmosphere::before {
-  background: radial-gradient(circle, rgba(158, 212, 119, 0.1), transparent 68%);
+  display: none;
 }
 
 .status-sweep {
@@ -299,9 +278,6 @@ summary:focus-visible {
   border: 2px solid #baffeb;
   border-radius: 50%;
   background: var(--aqua);
-  box-shadow:
-    0 0 0 6px rgba(89, 225, 189, 0.1),
-    0 0 24px rgba(89, 225, 189, 0.62);
 }
 
 .signal-ring {
@@ -324,9 +300,6 @@ summary:focus-visible {
 .phase-waiting .signal-core {
   border-color: #fff2d5;
   background: var(--amber);
-  box-shadow:
-    0 0 0 6px rgba(241, 184, 91, 0.1),
-    0 0 24px rgba(241, 184, 91, 0.56);
 }
 
 .phase-waiting .signal-ring {
@@ -336,7 +309,6 @@ summary:focus-visible {
 .phase-done .signal-core {
   border-color: #edffdf;
   background: var(--green);
-  box-shadow: 0 0 22px rgba(158, 212, 119, 0.5);
 }
 
 .phase-error .signal-core {
@@ -461,7 +433,6 @@ summary:focus-visible {
   transform: scaleX(0);
   transform-origin: left center;
   background: linear-gradient(90deg, var(--aqua), var(--amber) 52%, var(--green));
-  box-shadow: 0 0 12px rgba(89, 225, 189, 0.4);
 }
 
 .status-flow {
@@ -516,17 +487,14 @@ summary:focus-visible {
   height: 2px;
   border-radius: 0 0 4px 4px;
   background: var(--aqua);
-  box-shadow: 0 0 18px rgba(89, 225, 189, 0.5);
 }
 
 .stage-waiting .active-stage-glow {
   background: var(--amber);
-  box-shadow: 0 0 18px rgba(241, 184, 91, 0.5);
 }
 
 .stage-did .active-stage-glow {
   background: var(--green);
-  box-shadow: 0 0 18px rgba(158, 212, 119, 0.45);
 }
 
 .stage-topline {
@@ -841,7 +809,6 @@ summary:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: rgba(12, 25, 23, 0.66);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.02);
 }
 
 .launch-heading {
@@ -953,7 +920,6 @@ summary:focus-visible {
   color: #04100d;
   border-color: var(--aqua);
   background: var(--aqua);
-  box-shadow: 0 7px 22px rgba(40, 203, 160, 0.13);
 }
 
 .btn.primary:hover:not(:disabled) {
@@ -1067,7 +1033,6 @@ summary:focus-visible {
   margin-top: 5px;
   border-radius: 50%;
   background: var(--danger);
-  box-shadow: 0 0 14px rgba(255, 130, 147, 0.5);
 }
 
 .error div {
@@ -1104,7 +1069,6 @@ summary:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: rgba(12, 25, 23, 0.72);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.018);
 }
 
 .panel-head {
@@ -1154,7 +1118,6 @@ summary:focus-visible {
 
 .count i.is-live {
   background: var(--aqua);
-  box-shadow: 0 0 10px rgba(89, 225, 189, 0.65);
   animation: blink 1.4s ease-in-out infinite;
 }
 
@@ -1165,7 +1128,6 @@ summary:focus-visible {
 
 .report-status.is-ready i {
   background: var(--green);
-  box-shadow: 0 0 8px rgba(158, 212, 119, 0.5);
 }
 
 .muted {
@@ -1452,7 +1414,6 @@ summary:focus-visible {
   left: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--aqua), transparent);
-  box-shadow: 0 0 12px rgba(89, 225, 189, 0.45);
 }
 
 .report {
