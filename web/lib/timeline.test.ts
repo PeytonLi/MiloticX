@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildApprovalInputs,
+  describeApproval,
+  deriveRunStatus,
   eventToTimelineItem,
   extractApprovals,
   finalReport,
+  humanToolLabel,
   isDeltaEvent,
+  isIrreversibleTool,
+  pendingFromEvents,
 } from './timeline';
 
 describe('isDeltaEvent', () => {
@@ -17,10 +22,21 @@ describe('isDeltaEvent', () => {
   });
 });
 
+describe('humanToolLabel', () => {
+  it('maps known tools to plain English', () => {
+    expect(humanToolLabel('extract_steps')).toMatch(/Extract/i);
+    expect(humanToolLabel('create_pull_request')).toMatch(/pull request/i);
+  });
+  it('falls back to spaced names', () => {
+    expect(humanToolLabel('some_custom_tool')).toBe('some custom tool');
+  });
+});
+
 describe('eventToTimelineItem', () => {
   it('maps turn.created', () => {
     const item = eventToTimelineItem({ type: 'turn.created', id: '1', threadId: null });
     expect(item?.kind).toBe('turn-start');
+    expect(item?.title).toMatch(/Started/i);
   });
 
   it('maps mcp.initialize with server names', () => {
@@ -41,7 +57,7 @@ describe('eventToTimelineItem', () => {
     expect(item?.detail).toBe('sbx-1');
   });
 
-  it('maps model.message with tool calls to a "Calling" title', () => {
+  it('maps model.message with tool calls to a Running title', () => {
     const item = eventToTimelineItem({
       type: 'model.message',
       id: '4',
@@ -50,13 +66,14 @@ describe('eventToTimelineItem', () => {
       toolCalls: [{ id: 'tc1', function: { name: 'extract_steps', arguments: '{}' } }],
     });
     expect(item?.kind).toBe('message');
-    expect(item?.title).toContain('extract_steps');
+    expect(item?.title).toMatch(/Running/i);
+    expect(item?.title).toMatch(/Extract/i);
   });
 
   it('maps model.message with text content only', () => {
     const item = eventToTimelineItem({ type: 'model.message', id: '5', threadId: 'main', content: 'hello' });
     expect(item?.kind).toBe('message');
-    expect(item?.title).toBe('Agent');
+    expect(item?.title).toBe('Thinking');
     expect(item?.detail).toBe('hello');
   });
 
@@ -82,13 +99,15 @@ describe('eventToTimelineItem', () => {
   });
 
   it('maps tool.approval_required', () => {
-    expect(eventToTimelineItem({ type: 'tool.approval_required', id: '9', threadId: 'main' })?.kind).toBe('approval');
+    const item = eventToTimelineItem({ type: 'tool.approval_required', id: '9', threadId: 'main' });
+    expect(item?.kind).toBe('approval');
+    expect(item?.title).toMatch(/approval/i);
   });
 
   it('maps turn.done with status', () => {
     const item = eventToTimelineItem({ type: 'turn.done', id: '10', threadId: null, state: { status: 'done' } });
     expect(item?.kind).toBe('turn-end');
-    expect(item?.title).toBe('Turn done');
+    expect(item?.title).toBe('Finished');
   });
 
   it('returns null for unknown events', () => {
@@ -149,6 +168,34 @@ describe('buildApprovalInputs', () => {
   });
 });
 
+describe('pendingFromEvents', () => {
+  it('returns the latest unresolved approval', () => {
+    const events = new Map<string, any>([
+      [
+        'msg-1',
+        {
+          type: 'model.message',
+          id: 'msg-1',
+          toolCalls: [{ id: 'tc-9', function: { name: 'create_pull_request', arguments: '{}' } }],
+        },
+      ],
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+    ]);
+    expect(pendingFromEvents(events)[0]?.toolName).toBe('create_pull_request');
+  });
+
+  it('clears after turn.done', () => {
+    const events = new Map<string, any>([
+      ['appr', { type: 'tool.approval_required', threadId: 'main', toolCalls: [] }],
+      ['done', { type: 'turn.done', id: 'done' }],
+    ]);
+    expect(pendingFromEvents(events)).toEqual([]);
+  });
+});
+
 describe('finalReport', () => {
   it('returns the last turn.done output content', () => {
     const events = new Map<string, any>([
@@ -160,5 +207,87 @@ describe('finalReport', () => {
 
   it('returns null when no done output', () => {
     expect(finalReport(new Map())).toBeNull();
+  });
+});
+
+describe('isIrreversibleTool / describeApproval', () => {
+  it('flags PR tools as irreversible', () => {
+    expect(isIrreversibleTool('create_pull_request')).toBe(true);
+    expect(isIrreversibleTool('extract_steps')).toBe(false);
+  });
+
+  it('summarizes approval in plain English', () => {
+    const d = describeApproval({
+      threadId: 'main',
+      toolCallId: 'tc',
+      toolName: 'create_pull_request',
+      arguments: '{"owner":"acme","repo":"demo","title":"Fix README"}',
+      sourceEventId: 'm',
+    });
+    expect(d.summary).toMatch(/pull request/i);
+    expect(d.summary).toContain('acme');
+    expect(d.risk).toMatch(/Nothing happens until you approve/i);
+  });
+});
+
+describe('deriveRunStatus', () => {
+  it('is idle with no activity', () => {
+    const s = deriveRunStatus({ running: false, pending: [], timeline: [], report: null, error: null });
+    expect(s.phase).toBe('idle');
+  });
+
+  it('is waiting when approvals are pending', () => {
+    const s = deriveRunStatus({
+      running: false,
+      pending: [
+        {
+          threadId: 'main',
+          toolCallId: 'tc',
+          toolName: 'create_pull_request',
+          arguments: '{}',
+          sourceEventId: 'm',
+        },
+      ],
+      timeline: [],
+      report: null,
+      error: null,
+    });
+    expect(s.phase).toBe('waiting');
+    expect(s.headline).toMatch(/Waiting/i);
+  });
+
+  it('is doing while running', () => {
+    const s = deriveRunStatus({
+      running: true,
+      pending: [],
+      timeline: [{ id: '1', kind: 'sandbox', threadId: 'main', title: 'Opened isolated sandbox' }],
+      report: null,
+      error: null,
+    });
+    expect(s.phase).toBe('doing');
+    expect(s.headline).toMatch(/sandbox/i);
+  });
+
+  it('is done when a report exists', () => {
+    const s = deriveRunStatus({
+      running: false,
+      pending: [],
+      timeline: [{ id: '1', kind: 'turn-end', threadId: null, title: 'Finished' }],
+      report: '# ok',
+      error: null,
+    });
+    expect(s.phase).toBe('done');
+  });
+
+  it('is error when an error string is set', () => {
+    const s = deriveRunStatus({
+      running: false,
+      pending: [],
+      timeline: [],
+      report: null,
+      error: 'boom',
+    });
+    expect(s.phase).toBe('error');
+    expect(s.detail).toBe('boom');
   });
 });

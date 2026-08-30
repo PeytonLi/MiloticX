@@ -1,14 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityLog } from '../components/ActivityLog';
+import { ApprovalGate } from '../components/ApprovalGate';
+import { LaunchPad } from '../components/LaunchPad';
+import { StatusBoard } from '../components/StatusBoard';
 import { parseSnapshot, serializeSnapshot, STORAGE_KEY } from '../lib/persist';
 import { readSse } from '../lib/sse';
 import {
   buildApprovalInputs,
+  deriveRunStatus,
   eventToTimelineItem,
   extractApprovals,
   finalReport,
   isDeltaEvent,
+  pendingFromEvents,
   type PendingApproval,
   type TimelineItem,
 } from '../lib/timeline';
@@ -37,6 +43,7 @@ export default function Page() {
       setSessionId(snap.sessionId);
       indexRef.current = new Map(snap.events) as Map<string, AnyEvent>;
       orderRef.current = snap.order;
+      setPending(pendingFromEvents(indexRef.current));
     }
     setHydrated(true);
   }, []);
@@ -60,6 +67,12 @@ export default function Page() {
     .filter((e): e is AnyEvent => e !== undefined)
     .map((e) => eventToTimelineItem(e))
     .filter((x): x is TimelineItem => x !== null);
+
+  const status = useMemo(
+    () => deriveRunStatus({ running, pending, timeline, report, error }),
+    // tick forces recompute when refs mutate
+    [running, pending, report, error, tick],
+  );
 
   function processEvent(event: AnyEvent) {
     if (!event || typeof event !== 'object') return;
@@ -120,9 +133,9 @@ export default function Page() {
     }
   }
 
-  async function approve(status: 'allow' | 'deny') {
+  async function approve(decision: 'allow' | 'deny') {
     if (!sessionId || pending.length === 0) return;
-    const inputs = buildApprovalInputs(pending, status);
+    const inputs = buildApprovalInputs(pending, decision);
     setPending([]);
     setRunning(true);
     setError(null);
@@ -158,73 +171,56 @@ export default function Page() {
   }
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <span className="dot" />
+    <main className="app">
+      <header className="masthead">
+        <div className="wordmark">
+          <span className="mark" aria-hidden />
           README Verifier
-          <span className="muted">· mission control</span>
         </div>
-        <div className={`status ${running ? 'live' : ''}`}>{running ? '● running' : 'idle'}</div>
+        <p className="tagline">
+          Paste a repo. Watch the agent. Approve before anything public.
+        </p>
       </header>
 
-      <section className="controls">
-        <input
-          className="repo-input"
-          placeholder="github.com/owner/repo"
-          value={repo}
-          onChange={(e) => setRepo(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && run()}
-          spellCheck={false}
-        />
-        <button className="btn" onClick={run} disabled={running || !repo.trim()}>
-          {running ? 'Verifying…' : 'Verify README'}
-        </button>
-        <button className="btn ghost" onClick={reset} disabled={running}>
-          Reset
-        </button>
-      </section>
+      <StatusBoard status={status} didCount={timeline.length} />
 
-      {error && <div className="error">{error}</div>}
+      <LaunchPad repo={repo} running={running} onChange={setRepo} onRun={run} onReset={reset} />
 
-      {pending.length > 0 && (
-        <section className="gate">
-          <div className="gate-title">Approval required</div>
-          <p className="gate-body">
-            The agent wants to run <code>{pending[0]?.toolName}</code>. This action is public and may be
-            irreversible.
-          </p>
-          <pre className="gate-args">{pending[0]?.arguments ?? '{}'}</pre>
-          <div className="gate-actions">
-            <button className="btn danger" onClick={() => approve('deny')}>
-              Deny
-            </button>
-            <button className="btn ok" onClick={() => approve('allow')}>
-              Approve
-            </button>
-          </div>
-        </section>
+      {error && (
+        <div className="error" role="alert">
+          {error}
+        </div>
       )}
 
-      <section className="columns">
-        <div className="panel">
-          <h2>Timeline</h2>
-          {timeline.length === 0 && <p className="muted">No activity yet.</p>}
-          <ul className="timeline">
-            {timeline.map((item) => (
-              <li key={item.id} className={`tl tl-${item.kind}`}>
-                <div className="tl-title">{item.title}</div>
-                {item.detail && <div className="tl-detail">{item.detail}</div>}
-              </li>
-            ))}
-          </ul>
-        </div>
+      <ApprovalGate pending={pending} onAllow={() => approve('allow')} onDeny={() => approve('deny')} />
 
-        <div className="panel">
-          <h2>Report</h2>
-          {report ? <pre className="report">{report}</pre> : <p className="muted">The verification report will appear here.</p>}
-        </div>
-      </section>
+      <div className="workspace">
+        <section className="panel log-panel">
+          <header className="panel-head">
+            <h2>What it did</h2>
+            <span className="count">{timeline.length} steps</span>
+          </header>
+          <ActivityLog items={timeline} live={running || pending.length > 0} />
+        </section>
+
+        <section className="panel report-panel">
+          <header className="panel-head">
+            <h2>Report</h2>
+            {report && <span className="count">ready</span>}
+          </header>
+          {report ? (
+            <pre className="report">{report}</pre>
+          ) : (
+            <div className="empty-log">
+              <p className="empty-title">The report lands here</p>
+              <p className="muted">
+                After each step runs in the sandbox, the agent writes a verification report. A pull
+                request is never opened from this panel — only from the approval gate.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }
