@@ -87,9 +87,9 @@ this MCP server, the skill, and the sandbox together.
 ## Web UI (mission control)
 
 `web/` is a Next.js + React app that drives the agent through TrueForge's HTTP
-API and shows what it is doing — the Savile Row (Best UI) track. Paste a repo
-URL, and watch the live timeline (tool calls, sandbox, subagents), the approval
-gate with Allow/Deny, and the rendered report.
+API and shows what it is doing, what it is waiting on, and what it did — the
+Savile Row (Best UI) track. Paste a repo URL, watch the live status board and
+activity log, and answer the approval gate **before** any public PR action.
 
 ```sh
 cd web
