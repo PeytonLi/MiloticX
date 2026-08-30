@@ -220,9 +220,29 @@ function normalizeRequiredActions(event: AnyEvent): AnyEvent[] {
     .filter((a: AnyEvent) => typeof a.id === 'string' && a.id.length > 0);
 }
 
+function refsByToolCallId(toolCalls: AnyEvent[] | undefined): Map<string, AnyEvent> {
+  const map = new Map<string, AnyEvent>();
+  for (const ref of toolCalls ?? []) {
+    const id = ref?.id ?? ref?.toolCallId;
+    if (typeof id !== 'string' || !id) continue;
+    map.set(id, { id, sourceEventId: ref?.sourceEventId });
+  }
+  return map;
+}
+
+/** Keep sourceEventId from the last approval_required when turn.done only sends the tool-call id. */
+function mergeApprovalRefs(previous: AnyEvent | null, incoming: AnyEvent[]): AnyEvent[] {
+  const prior = refsByToolCallId(previous?.toolCalls);
+  return incoming.map((a) => ({
+    id: a.id,
+    sourceEventId: a.sourceEventId ?? prior.get(a.id)?.sourceEventId,
+  }));
+}
+
 /** TrueForge closes a paused approval stream with turn.done; that is not a resolution. */
 export function isPausedTurnDone(event: AnyEvent): boolean {
   if (event?.type !== 'turn.done') return false;
+  if (isCompletedStatus(event?.state?.status)) return false;
   if (normalizeRequiredActions(event).length > 0) return true;
   return isWaitingStatus(event?.state?.status);
 }
@@ -255,9 +275,19 @@ export function pendingFromEvents(
     }
     if (event?.type !== 'turn.done') continue;
 
+    // Terminal status wins over leftover/diagnostic requiredActions.
+    if (isCompletedStatus(event?.state?.status)) {
+      latest = null;
+      pauseClosed = false;
+      continue;
+    }
+
     const actions = normalizeRequiredActions(event);
     if (actions.length > 0) {
-      latest = asApprovalEvent(event.threadId ?? latest?.threadId ?? 'main', actions);
+      latest = asApprovalEvent(
+        event.threadId ?? latest?.threadId ?? 'main',
+        mergeApprovalRefs(latest, actions),
+      );
       pauseClosed = true;
       continue;
     }
@@ -268,12 +298,12 @@ export function pendingFromEvents(
     if (!latest) continue;
 
     const open = extractApprovals(latest, events).filter((p) => !resolved.has(p.toolCallId));
-    // First stream close after an unresolved approval is the pause, not a resolution.
+    // Status-less first stream close after an unresolved approval is the pause.
     if (!pauseClosed && open.length > 0) {
       pauseClosed = true;
       continue;
     }
-    if (isCompletedStatus(event?.state?.status) || pauseClosed) {
+    if (pauseClosed) {
       latest = null;
       pauseClosed = false;
     }
@@ -290,15 +320,30 @@ export function extractApprovals(
   const threadId = approvalEvent?.threadId ?? 'main';
   const result: PendingApproval[] = [];
   for (const ref of approvalEvent?.toolCalls ?? []) {
-    const source = events.get(ref?.sourceEventId);
-    if (source?.type !== 'model.message') continue;
-    const call = (source.toolCalls ?? []).find((c: AnyEvent) => c.id === ref?.id);
+    const toolCallId = ref?.id ?? ref?.toolCallId;
+    if (typeof toolCallId !== 'string' || !toolCallId) continue;
+    let source = events.get(ref?.sourceEventId);
+    let call =
+      source?.type === 'model.message'
+        ? (source.toolCalls ?? []).find((c: AnyEvent) => c.id === toolCallId)
+        : undefined;
+    if (!call) {
+      for (const event of events.values()) {
+        if (event?.type !== 'model.message') continue;
+        call = (event.toolCalls ?? []).find((c: AnyEvent) => c.id === toolCallId);
+        if (call) {
+          source = event;
+          break;
+        }
+      }
+    }
+    if (!call) continue;
     result.push({
       threadId,
-      toolCallId: ref?.id,
+      toolCallId,
       toolName: toolCallName(call),
       arguments: toolCallArgs(call),
-      sourceEventId: ref?.sourceEventId,
+      sourceEventId: ref?.sourceEventId ?? source?.id,
     });
   }
   return result;

@@ -9,6 +9,7 @@ import {
   humanToolLabel,
   isDeltaEvent,
   isIrreversibleTool,
+  isPausedTurnDone,
   pendingFromEvents,
 } from './timeline';
 
@@ -121,6 +122,17 @@ describe('eventToTimelineItem', () => {
     expect(item?.title).toBe('Finished');
   });
 
+  it('maps terminal turn.done with leftover requiredActions as Finished', () => {
+    const item = eventToTimelineItem({
+      type: 'turn.done',
+      id: '10',
+      threadId: 'main',
+      state: { status: 'done', requiredActions: [{ id: 'tc-9' }] },
+    });
+    expect(item?.kind).toBe('turn-end');
+    expect(item?.title).toBe('Finished');
+  });
+
   it('returns null for unknown events', () => {
     expect(eventToTimelineItem({ type: 'weird.event', id: '11' })).toBeNull();
   });
@@ -224,6 +236,30 @@ describe('pendingFromEvents', () => {
     expect(pendingFromEvents(events)[0]?.toolCallId).toBe('tc-9');
   });
 
+  it('reconstructs the gate when paused turn.done requiredActions are id-only', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      [
+        'done',
+        {
+          type: 'turn.done',
+          id: 'done',
+          threadId: 'main',
+          state: { status: 'waiting_for_approval', requiredActions: [{ id: 'tc-9' }] },
+        },
+      ],
+    ]);
+    expect(isPausedTurnDone(events.get('done'))).toBe(true);
+    const pending = pendingFromEvents(events);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.toolName).toBe('create_pull_request');
+    expect(pending[0]?.sourceEventId).toBe('msg-1');
+  });
+
   it('clears after a matching user.tool_approval', () => {
     const events = new Map<string, any>([
       msg,
@@ -274,6 +310,51 @@ describe('pendingFromEvents', () => {
       ],
     ]);
     expect(pendingFromEvents(events, ['tc-9'])).toEqual([]);
+  });
+
+  for (const status of ['done', 'cancelled', 'error'] as const) {
+    it(`clears when the first turn.done is explicitly ${status}`, () => {
+      const events = new Map<string, any>([
+        msg,
+        [
+          'appr',
+          { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+        ],
+        ['done', { type: 'turn.done', id: 'done', threadId: 'main', state: { status } }],
+      ]);
+      expect(pendingFromEvents(events)).toEqual([]);
+    });
+
+    it(`clears ${status} even when requiredActions is still populated`, () => {
+      const doneEvent = {
+        type: 'turn.done',
+        id: 'done',
+        threadId: 'main',
+        state: { status, requiredActions: [{ id: 'tc-9' }] },
+      };
+      expect(isPausedTurnDone(doneEvent)).toBe(false);
+      const events = new Map<string, any>([
+        msg,
+        [
+          'appr',
+          { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+        ],
+        ['done', doneEvent],
+      ]);
+      expect(pendingFromEvents(events)).toEqual([]);
+    });
+  }
+
+  it('keeps the gate for a status-less first turn.done (paused stream close)', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      ['done', { type: 'turn.done', id: 'done', threadId: 'main' }],
+    ]);
+    expect(pendingFromEvents(events)).toHaveLength(1);
   });
 });
 

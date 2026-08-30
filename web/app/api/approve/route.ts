@@ -28,8 +28,12 @@ export async function POST(req: Request) {
   try {
     stream = await client.sessions.createTurnStream(sessionId, { input: approvals });
   } catch (err) {
+    // 502: TrueForge did not accept the resume. The client must keep the gate.
     return Response.json({ error: `Failed to resume turn: ${String(err)}` }, { status: 502 });
   }
+
+  // 200 + event-stream: the approval was accepted. Stream errors after this are
+  // delivery failures, not a rejected decision.
 
   const body = new ReadableStream({
     async start(controller) {
