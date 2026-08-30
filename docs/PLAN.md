@@ -1,4 +1,4 @@
-# Build Plan — README Verifier
+# Build Plan — MiloticX
 
 > One-day build plan for the TrueForge **Agent Harness Hackathon**.
 > See `docs/PRD.md` for requirements and scope.

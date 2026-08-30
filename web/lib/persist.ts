@@ -8,7 +8,7 @@ export interface Snapshot {
   resolvedToolCallIds: string[];
 }
 
-export const STORAGE_KEY = 'readme-verifier:snapshot';
+export const STORAGE_KEY = 'miloticx:snapshot';
 
 export function serializeSnapshot(snapshot: Snapshot): string {
   return JSON.stringify(snapshot);

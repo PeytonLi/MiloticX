@@ -1,4 +1,4 @@
-# PRD — README Verifier
+# PRD — MiloticX
 
 > An agent that verifies a repository's README by actually running it, then fixes what's broken.
 > Built on TrueForge for the WeMakeDevs × TrueFoundry **Agent Harness Hackathon** (Aug 24–30, 2026).

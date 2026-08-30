@@ -22,9 +22,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'README Verifier — watch, wait, approve',
+  title: 'MiloticX — watch, wait, approve',
   description:
-    'A stranger-ready control board: see what the agent is doing, what it is waiting on, and what it did. Approve before any irreversible step.',
+    'MiloticX verifies a README by running it. See what the agent is doing, what it is waiting on, and what it did — approve before anything public.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

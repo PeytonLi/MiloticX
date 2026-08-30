@@ -211,7 +211,7 @@ export default function Page() {
       <header className="masthead">
         <div className="wordmark">
           <span className="mark" aria-hidden />
-          README Verifier
+          MiloticX
         </div>
         <p className="tagline">
           Paste a repo. Watch the agent. Approve before anything public.

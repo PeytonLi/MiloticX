@@ -1,4 +1,4 @@
-# readme-verifier
+# MiloticX
 
 An agent that verifies a repository's README by **actually running it**, then
 fixes what's broken. Built on [TrueForge](https://trueforge.dev) for the
