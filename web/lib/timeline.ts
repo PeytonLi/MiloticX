@@ -267,13 +267,20 @@ export function pendingFromEvents(
     }
     if (!latest) continue;
 
+    // Explicit terminal statuses resolve the gate before any first-close fallback.
+    if (isCompletedStatus(event?.state?.status)) {
+      latest = null;
+      pauseClosed = false;
+      continue;
+    }
+
     const open = extractApprovals(latest, events).filter((p) => !resolved.has(p.toolCallId));
-    // First stream close after an unresolved approval is the pause, not a resolution.
+    // Status-less first stream close after an unresolved approval is the pause.
     if (!pauseClosed && open.length > 0) {
       pauseClosed = true;
       continue;
     }
-    if (isCompletedStatus(event?.state?.status) || pauseClosed) {
+    if (pauseClosed) {
       latest = null;
       pauseClosed = false;
     }

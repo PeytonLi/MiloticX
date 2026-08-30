@@ -150,18 +150,13 @@ export default function Page() {
 
   async function approve(decision: 'allow' | 'deny') {
     if (!sessionId || pending.length === 0) return;
-    const inputs = buildApprovalInputs(pending, decision);
-    resolvedRef.current = [...new Set([...resolvedRef.current, ...pending.map((p) => p.toolCallId)])];
-    for (const input of inputs) {
-      const id = `user-approval:${input.toolCallId}`;
-      indexRef.current.set(id, input);
-      orderRef.current.push(id);
-    }
+    const held = pending;
+    const inputs = buildApprovalInputs(held, decision);
     setPending([]);
     setRunning(true);
     setError(null);
-    persistSnapshot();
     bump();
+    let accepted = false;
     try {
       const res = await fetch('/api/approve', {
         method: 'POST',
@@ -170,14 +165,30 @@ export default function Page() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        setPending(held);
         setError(data.error ?? `Request failed (${res.status})`);
         setRunning(false);
+        bump();
         return;
       }
+      accepted = true;
+      // Headers 200: TrueForge accepted the resume. Persist before consuming SSE
+      // so a reload mid-stream does not resurrect the gate. Failures after this
+      // (stream errors) must not restore pending — the decision already landed.
+      resolvedRef.current = [...new Set([...resolvedRef.current, ...held.map((p) => p.toolCallId)])];
+      for (const input of inputs) {
+        const id = `user-approval:${input.toolCallId}`;
+        indexRef.current.set(id, input);
+        orderRef.current.push(id);
+      }
+      persistSnapshot();
+      bump();
       for await (const event of readSse(res)) processEvent(event as AnyEvent);
     } catch (err) {
       setError(String(err));
       setRunning(false);
+      if (!accepted) setPending(held);
+      bump();
     }
   }
 

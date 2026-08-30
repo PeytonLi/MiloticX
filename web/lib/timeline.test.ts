@@ -275,6 +275,32 @@ describe('pendingFromEvents', () => {
     ]);
     expect(pendingFromEvents(events, ['tc-9'])).toEqual([]);
   });
+
+  for (const status of ['done', 'cancelled', 'error'] as const) {
+    it(`clears when the first turn.done is explicitly ${status}`, () => {
+      const events = new Map<string, any>([
+        msg,
+        [
+          'appr',
+          { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+        ],
+        ['done', { type: 'turn.done', id: 'done', threadId: 'main', state: { status } }],
+      ]);
+      expect(pendingFromEvents(events)).toEqual([]);
+    });
+  }
+
+  it('keeps the gate for a status-less first turn.done (paused stream close)', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      ['done', { type: 'turn.done', id: 'done', threadId: 'main' }],
+    ]);
+    expect(pendingFromEvents(events)).toHaveLength(1);
+  });
 });
 
 describe('finalReport', () => {
