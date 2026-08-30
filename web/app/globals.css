@@ -415,26 +415,6 @@ summary:focus-visible {
   background: rgba(0, 0, 0, 0.11);
 }
 
-.flow-line {
-  position: absolute;
-  top: 46px;
-  right: 17%;
-  left: 17%;
-  z-index: 0;
-  height: 1px;
-  overflow: hidden;
-  background: var(--line-strong);
-}
-
-.flow-line-progress {
-  position: absolute;
-  inset: 0;
-  display: block;
-  transform: scaleX(0);
-  transform-origin: left center;
-  background: linear-gradient(90deg, var(--aqua), var(--amber) 52%, var(--green));
-}
-
 .status-flow {
   position: relative;
   z-index: 1;
@@ -1512,10 +1492,6 @@ summary:focus-visible {
 
   .flow-shell {
     padding: 14px;
-  }
-
-  .flow-line {
-    display: none;
   }
 
   .status-flow {

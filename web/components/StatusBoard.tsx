@@ -155,22 +155,6 @@ export function StatusBoard({ status, didCount }: { status: RunStatus; didCount:
       </header>
 
       <div className="flow-shell">
-        <div className="flow-line" aria-hidden>
-          <motion.span
-            className="flow-line-progress"
-            animate={{
-              scaleX:
-                status.phase === 'done'
-                  ? 1
-                  : status.phase === 'waiting'
-                    ? 0.55
-                    : status.phase === 'doing'
-                      ? 0.18
-                      : 0,
-            }}
-            transition={{ type: 'spring', stiffness: 110, damping: 22 }}
-          />
-        </div>
         <ol className="status-flow" aria-label="What the agent is doing, waiting on, and did">
           {stages.map((item, index) => {
             const state = stageState(item.stage, status.phase);
