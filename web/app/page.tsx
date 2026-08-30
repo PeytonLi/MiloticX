@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { ActivityLog } from '../components/ActivityLog';
 import { ApprovalGate } from '../components/ApprovalGate';
 import { LaunchPad } from '../components/LaunchPad';
@@ -202,56 +203,140 @@ export default function Page() {
   }
 
   return (
-    <main className="app">
-      <header className="masthead">
-        <div className="wordmark">
-          <span className="mark" aria-hidden />
-          MiloticX
-        </div>
-        <p className="tagline">
-          Paste a repo. Watch the agent. Approve before anything public.
-        </p>
-      </header>
-
-      <StatusBoard status={status} didCount={timeline.length} />
-
-      <LaunchPad repo={repo} running={running} onChange={setRepo} onRun={run} onReset={reset} />
-
-      {error && (
-        <div className="error" role="alert">
-          {error}
-        </div>
-      )}
-
-      <ApprovalGate pending={pending} onAllow={() => approve('allow')} onDeny={() => approve('deny')} />
-
-      <div className="workspace">
-        <section className="panel log-panel">
-          <header className="panel-head">
-            <h2>What it did</h2>
-            <span className="count">{timeline.length} steps</span>
-          </header>
-          <ActivityLog items={timeline} live={running || pending.length > 0} />
-        </section>
-
-        <section className="panel report-panel">
-          <header className="panel-head">
-            <h2>Report</h2>
-            {report && <span className="count">ready</span>}
-          </header>
-          {report ? (
-            <pre className="report">{report}</pre>
-          ) : (
-            <div className="empty-log">
-              <p className="empty-title">The report lands here</p>
-              <p className="muted">
-                After each step runs in the sandbox, the agent writes a verification report. A pull
-                request is never opened from this panel — only from the approval gate.
-              </p>
+    <MotionConfig reducedMotion="user">
+      <main className="app">
+        <header className="masthead">
+          <div className="brand-lockup">
+            <div className="wordmark">
+              <span className="mark" aria-hidden>
+                <i />
+              </span>
+              MiloticX
             </div>
+            <span className="product-type">README operations</span>
+          </div>
+          <div className="masthead-meta">
+            <p className="tagline">See every move. Approve every consequence.</p>
+            <span className="safety-chip">
+              <i aria-hidden />
+              Sandbox isolated
+            </span>
+          </div>
+        </header>
+
+        <StatusBoard status={status} didCount={timeline.length} />
+
+        <AnimatePresence mode="wait">
+          {pending.length > 0 && (
+            <ApprovalGate
+              key={pending.map((item) => item.toolCallId).join(':')}
+              pending={pending}
+              onAllow={() => approve('allow')}
+              onDeny={() => approve('deny')}
+            />
           )}
-        </section>
-      </div>
-    </main>
+        </AnimatePresence>
+
+        <LaunchPad
+          repo={repo}
+          running={running}
+          locked={pending.length > 0}
+          onChange={setRepo}
+          onRun={run}
+          onReset={reset}
+        />
+
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              className="error"
+              role="alert"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+            >
+              <span className="error-mark" aria-hidden />
+              <div>
+                <strong>Run interrupted</strong>
+                <span>{error}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <motion.div
+          className="workspace"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.14, duration: 0.38 }}
+        >
+          <section className="panel log-panel">
+            <header className="panel-head">
+              <div>
+                <span className="panel-kicker">Run trace</span>
+                <h2>What happened</h2>
+              </div>
+              <span className="count">
+                <i className={running || pending.length > 0 ? 'is-live' : ''} aria-hidden />
+                {timeline.length} events
+              </span>
+            </header>
+            <ActivityLog items={timeline} live={running || pending.length > 0} />
+          </section>
+
+          <section className="panel report-panel">
+            <header className="panel-head">
+              <div>
+                <span className="panel-kicker">Generated artifact</span>
+                <h2>Verification report</h2>
+              </div>
+              <span className={`count report-status${report ? ' is-ready' : ''}`}>
+                <i aria-hidden />
+                {report ? 'Ready' : 'Pending'}
+              </span>
+            </header>
+            <AnimatePresence mode="wait">
+              {report ? (
+                <motion.pre
+                  key="report"
+                  className="report"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                >
+                  {report}
+                </motion.pre>
+              ) : (
+                <motion.div
+                  key="empty-report"
+                  className="report-empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <div className="report-blueprint" aria-hidden>
+                    <span className="blueprint-head" />
+                    <span />
+                    <span />
+                    <span className="short" />
+                    <motion.i
+                      animate={running ? { y: [0, 74, 0] } : { y: 0 }}
+                      transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                  </div>
+                  <div>
+                    <p className="empty-title">{running ? 'Building the evidence' : 'Report waiting room'}</p>
+                    <p className="muted">
+                      Results appear after the sandbox run. Public changes can only happen through the
+                      approval checkpoint.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </section>
+        </motion.div>
+      </main>
+    </MotionConfig>
   );
 }
