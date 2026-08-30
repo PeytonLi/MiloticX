@@ -366,12 +366,21 @@ export function buildApprovalInputs(
 }
 
 export function finalReport(events: Map<string, AnyEvent>): string | null {
+  let fromTurn: string | null = null;
+  let fromMessage: string | null = null;
   for (const event of events.values()) {
     if (event.type === 'turn.done' && event.state?.output?.content) {
-      return event.state.output.content;
+      fromTurn = event.state.output.content;
+    }
+    if (
+      event.type === 'model.message' &&
+      typeof event.content === 'string' &&
+      /verification report/i.test(event.content)
+    ) {
+      fromMessage = event.content;
     }
   }
-  return null;
+  return fromTurn ?? fromMessage;
 }
 
 /** True when this tool would change something public / hard to undo. */

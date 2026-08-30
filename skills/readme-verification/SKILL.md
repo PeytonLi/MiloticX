@@ -37,8 +37,10 @@ execute a repo's documented setup steps safely and report what broke.
 6. **Investigate** failures: check installed tool versions, try the documented
    alternates, and only then propose a corrected command.
 7. **Report** with the `build_report` tool.
-8. **Pause for approval** before any public, semi-irreversible action — forking,
-   pushing a branch, or opening a PR.
+8. **Apply the fix through GitHub write tools** (update the README, push a branch,
+   open a PR). Do **not** ask for approval in chat and stop. Calling a write tool
+   is what triggers the harness approval gate — the human sees Allow/Deny in the
+   UI before anything public happens. If there is nothing to fix, say so and end.
 
 ## Use subagents for parallel paths
 

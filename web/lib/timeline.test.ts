@@ -370,6 +370,21 @@ describe('finalReport', () => {
   it('returns null when no done output', () => {
     expect(finalReport(new Map())).toBeNull();
   });
+
+  it('falls back to a model.message that contains the verification report', () => {
+    const events = new Map<string, any>([
+      [
+        '1',
+        {
+          type: 'model.message',
+          id: '1',
+          content: '## Verification Report\n\n| Step | Command |\n',
+        },
+      ],
+      ['2', { type: 'turn.done', id: '2', state: { status: 'done' } }],
+    ]);
+    expect(finalReport(events)).toMatch(/Verification Report/);
+  });
 });
 
 describe('isIrreversibleTool / describeApproval', () => {

@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const content = `Verify the README of the repository ${repo}. Follow the readme-verification skill: extract the setup steps, run each in the sandbox, classify failures, and produce a verification report. Pause for approval before opening a pull request.`;
+  const content = `Verify the README of the repository ${repo}. Follow the readme-verification skill: extract the setup steps, run each in the sandbox, classify failures, and produce a verification report with build_report. If anything failed with a clear README fix, CALL the GitHub write tools to apply the fix and open a pull request — do not ask for approval in chat and stop. Write tools are approval-gated; the UI will pause for Allow/Deny before anything public happens.`;
 
   let stream;
   try {
