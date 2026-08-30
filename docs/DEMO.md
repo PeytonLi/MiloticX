@@ -1,6 +1,6 @@
 # Demo Script (3 minutes)
 
-Goal: show the problem, the agent doing real work through the harness, and the
+**MiloticX** — show the problem, the agent doing real work through the harness, and the
 one moment every other submission skips — the approval pause. Two surfaces are
 available; the **Mission Control UI** (`web/`) is the primary showcase and the
 Savile Row (Best UI) entry.
