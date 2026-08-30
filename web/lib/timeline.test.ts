@@ -9,6 +9,7 @@ import {
   humanToolLabel,
   isDeltaEvent,
   isIrreversibleTool,
+  isPausedTurnDone,
   pendingFromEvents,
 } from './timeline';
 
@@ -222,6 +223,30 @@ describe('pendingFromEvents', () => {
     ]);
     expect(pendingFromEvents(events)).toHaveLength(1);
     expect(pendingFromEvents(events)[0]?.toolCallId).toBe('tc-9');
+  });
+
+  it('reconstructs the gate when paused turn.done requiredActions are id-only', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      [
+        'done',
+        {
+          type: 'turn.done',
+          id: 'done',
+          threadId: 'main',
+          state: { status: 'waiting_for_approval', requiredActions: [{ id: 'tc-9' }] },
+        },
+      ],
+    ]);
+    expect(isPausedTurnDone(events.get('done'))).toBe(true);
+    const pending = pendingFromEvents(events);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.toolName).toBe('create_pull_request');
+    expect(pending[0]?.sourceEventId).toBe('msg-1');
   });
 
   it('clears after a matching user.tool_approval', () => {
