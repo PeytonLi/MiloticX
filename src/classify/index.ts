@@ -35,6 +35,7 @@ const MISSING_DEP_MARKERS = [
 const OUTDATED_MARKERS = [
   'unknown option',
   'invalid option',
+  'unrecognized option',
   'unrecognized argument',
   'no such option',
   'unexpected argument',

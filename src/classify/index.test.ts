@@ -70,6 +70,12 @@ describe('classifyFailure', () => {
     ).toBe('outdated-command');
   });
 
+  it('classifies "unrecognized option" as outdated-command', () => {
+    expect(
+      classifyFailure({ ...base, exitCode: 2, stderr: "ls: unrecognized option '--versoin'" }),
+    ).toBe('outdated-command');
+  });
+
   it('classifies a password prompt ahead of a command-not-found in the same output', () => {
     expect(
       classifyFailure({
