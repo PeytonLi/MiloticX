@@ -104,6 +104,17 @@ describe('eventToTimelineItem', () => {
     expect(item?.title).toMatch(/approval/i);
   });
 
+  it('maps paused turn.done to an approval item, not Finished', () => {
+    const item = eventToTimelineItem({
+      type: 'turn.done',
+      id: 'p',
+      threadId: 'main',
+      state: { status: 'waiting_for_approval', requiredActions: [{ id: 'tc-9' }] },
+    });
+    expect(item?.kind).toBe('approval');
+    expect(item?.title).toMatch(/approval/i);
+  });
+
   it('maps turn.done with status', () => {
     const item = eventToTimelineItem({ type: 'turn.done', id: '10', threadId: null, state: { status: 'done' } });
     expect(item?.kind).toBe('turn-end');
@@ -169,16 +180,18 @@ describe('buildApprovalInputs', () => {
 });
 
 describe('pendingFromEvents', () => {
+  const msg = [
+    'msg-1',
+    {
+      type: 'model.message',
+      id: 'msg-1',
+      toolCalls: [{ id: 'tc-9', function: { name: 'create_pull_request', arguments: '{}' } }],
+    },
+  ] as const;
+
   it('returns the latest unresolved approval', () => {
     const events = new Map<string, any>([
-      [
-        'msg-1',
-        {
-          type: 'model.message',
-          id: 'msg-1',
-          toolCalls: [{ id: 'tc-9', function: { name: 'create_pull_request', arguments: '{}' } }],
-        },
-      ],
+      msg,
       [
         'appr',
         { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
@@ -187,12 +200,80 @@ describe('pendingFromEvents', () => {
     expect(pendingFromEvents(events)[0]?.toolName).toBe('create_pull_request');
   });
 
-  it('clears after turn.done', () => {
+  it('keeps the gate after tool.approval_required followed by the paused turn\'s turn.done', () => {
     const events = new Map<string, any>([
-      ['appr', { type: 'tool.approval_required', threadId: 'main', toolCalls: [] }],
-      ['done', { type: 'turn.done', id: 'done' }],
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      [
+        'done',
+        {
+          type: 'turn.done',
+          id: 'done',
+          threadId: 'main',
+          state: {
+            status: 'waiting_for_approval',
+            requiredActions: [{ id: 'tc-9', sourceEventId: 'msg-1' }],
+          },
+        },
+      ],
+    ]);
+    expect(pendingFromEvents(events)).toHaveLength(1);
+    expect(pendingFromEvents(events)[0]?.toolCallId).toBe('tc-9');
+  });
+
+  it('clears after a matching user.tool_approval', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      ['done', { type: 'turn.done', id: 'done', state: { status: 'waiting_for_approval' } }],
+      [
+        'allow',
+        { type: 'user.tool_approval', threadId: 'main', toolCallId: 'tc-9', approval: { status: 'allow' } },
+      ],
     ]);
     expect(pendingFromEvents(events)).toEqual([]);
+  });
+
+  it('clears after a later completed turn.done', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      ['paused', { type: 'turn.done', id: 'paused', state: { status: 'waiting_for_approval' } }],
+      ['done', { type: 'turn.done', id: 'done', state: { status: 'done' } }],
+    ]);
+    expect(pendingFromEvents(events)).toEqual([]);
+  });
+
+  it('clears snapshot-recorded ids even without a later turn.done', () => {
+    const events = new Map<string, any>([
+      msg,
+      [
+        'appr',
+        { type: 'tool.approval_required', threadId: 'main', toolCalls: [{ id: 'tc-9', sourceEventId: 'msg-1' }] },
+      ],
+      [
+        'done',
+        {
+          type: 'turn.done',
+          id: 'done',
+          threadId: 'main',
+          state: {
+            status: 'waiting_for_approval',
+            requiredActions: [{ id: 'tc-9', sourceEventId: 'msg-1' }],
+          },
+        },
+      ],
+    ]);
+    expect(pendingFromEvents(events, ['tc-9'])).toEqual([]);
   });
 });
 

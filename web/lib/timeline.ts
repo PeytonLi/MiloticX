@@ -170,6 +170,15 @@ export function eventToTimelineItem(event: AnyEvent): TimelineItem | null {
         lane: 'Gate',
       };
     case 'turn.done': {
+      if (isPausedTurnDone(event)) {
+        return {
+          id,
+          kind: 'approval',
+          threadId,
+          title: 'Paused — needs your approval',
+          lane: 'Gate',
+        };
+      }
       const status = event?.state?.status;
       const metrics = event?.state?.metrics;
       const detail = metrics ? `tokens: ${metrics.totalTokens ?? '?'}` : undefined;
@@ -187,14 +196,91 @@ export function eventToTimelineItem(event: AnyEvent): TimelineItem | null {
   }
 }
 
-/** Rebuild pending approvals from stored events (page reload mid-gate). */
-export function pendingFromEvents(events: Map<string, AnyEvent>): PendingApproval[] {
+function isWaitingStatus(status: unknown): boolean {
+  return (
+    status === 'waiting_for_approval' ||
+    status === 'requires_action' ||
+    status === 'paused' ||
+    status === 'approval_required'
+  );
+}
+
+function isCompletedStatus(status: unknown): boolean {
+  return status === 'done' || status === 'completed' || status === 'cancelled' || status === 'error';
+}
+
+function normalizeRequiredActions(event: AnyEvent): AnyEvent[] {
+  const raw = event?.state?.requiredActions ?? event?.state?.required_actions ?? [];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((a: AnyEvent) => ({
+      id: a?.id ?? a?.toolCallId,
+      sourceEventId: a?.sourceEventId,
+    }))
+    .filter((a: AnyEvent) => typeof a.id === 'string' && a.id.length > 0);
+}
+
+/** TrueForge closes a paused approval stream with turn.done; that is not a resolution. */
+export function isPausedTurnDone(event: AnyEvent): boolean {
+  if (event?.type !== 'turn.done') return false;
+  if (normalizeRequiredActions(event).length > 0) return true;
+  return isWaitingStatus(event?.state?.status);
+}
+
+function asApprovalEvent(threadId: string, toolCalls: AnyEvent[]): AnyEvent {
+  return { type: 'tool.approval_required', threadId, toolCalls };
+}
+
+/**
+ * Rebuild pending approvals from stored events (page reload mid-gate).
+ * A paused turn.done does not clear the gate. Only a matching allow/deny
+ * (`user.tool_approval` or snapshot `resolvedToolCallIds`) or a later completed
+ * turn does.
+ */
+export function pendingFromEvents(
+  events: Map<string, AnyEvent>,
+  resolvedToolCallIds: Iterable<string> = [],
+): PendingApproval[] {
+  const resolved = new Set(resolvedToolCallIds);
   let latest: AnyEvent | null = null;
+  let pauseClosed = false;
+
   for (const event of events.values()) {
-    if (event?.type === 'tool.approval_required') latest = event;
-    if (event?.type === 'turn.done') latest = null;
+    if (event?.type === 'tool.approval_required') {
+      latest = event;
+      pauseClosed = false;
+    }
+    if (event?.type === 'user.tool_approval' && typeof event.toolCallId === 'string') {
+      resolved.add(event.toolCallId);
+    }
+    if (event?.type !== 'turn.done') continue;
+
+    const actions = normalizeRequiredActions(event);
+    if (actions.length > 0) {
+      latest = asApprovalEvent(event.threadId ?? latest?.threadId ?? 'main', actions);
+      pauseClosed = true;
+      continue;
+    }
+    if (isWaitingStatus(event?.state?.status)) {
+      pauseClosed = true;
+      continue;
+    }
+    if (!latest) continue;
+
+    const open = extractApprovals(latest, events).filter((p) => !resolved.has(p.toolCallId));
+    // First stream close after an unresolved approval is the pause, not a resolution.
+    if (!pauseClosed && open.length > 0) {
+      pauseClosed = true;
+      continue;
+    }
+    if (isCompletedStatus(event?.state?.status) || pauseClosed) {
+      latest = null;
+      pauseClosed = false;
+    }
   }
-  return latest ? extractApprovals(latest, events) : [];
+
+  if (!latest) return [];
+  return extractApprovals(latest, events).filter((p) => !resolved.has(p.toolCallId));
 }
 
 export function extractApprovals(

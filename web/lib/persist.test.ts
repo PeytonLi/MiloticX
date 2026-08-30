@@ -11,6 +11,7 @@ function snapshot(): Snapshot {
       ['e1', { type: 'turn.created', id: 'e1' }],
       ['e2', { type: 'turn.done', id: 'e2', state: { status: 'done' } }],
     ],
+    resolvedToolCallIds: ['tc-9'],
   };
 }
 
@@ -34,6 +35,7 @@ describe('serializeSnapshot / parseSnapshot', () => {
     expect(parseSnapshot('{"order":[],"events":[]}')).toEqual({
       order: [],
       events: [],
+      resolvedToolCallIds: [],
     });
   });
 
@@ -41,5 +43,6 @@ describe('serializeSnapshot / parseSnapshot', () => {
     const s = snapshot();
     const parsed = parseSnapshot(serializeSnapshot(s));
     expect(parsed?.events[1]?.[1]).toEqual({ type: 'turn.done', id: 'e2', state: { status: 'done' } });
+    expect(parsed?.resolvedToolCallIds).toEqual(['tc-9']);
   });
 });
