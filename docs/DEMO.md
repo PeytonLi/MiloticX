@@ -19,13 +19,22 @@ Savile Row (Best UI) entry.
   ## Install
   ```sh
   node --version
-  npm install -g definitely-not-a-real-cli
+  npm --versoin
   ```
   ```
 
   Keep it fast: a long `pnpm install`/`npm test` gives the Daytona sandbox time to
   idle out (see Risks). Your own `readme-verifier` repo is too slow for the demo —
-  use a tiny throwaway repo instead.
+  use a tiny throwaway repo instead. Two ready-made repos exist for this:
+  `github.com/PeytonLi/readme-verifier-demo` (single broken flag) and
+  `github.com/PeytonLi/readme-verifier-demo-multipath` (macOS/Linux paths, for a
+  subagent fan-out).
+
+- **GitHub token with write access.** The fine-grained PAT in the GitHub
+  connector must have `Contents: Read and write` + `Pull requests: Read and
+  write` on the demo repo(s), or the PR-open step will fail with `403 Resource
+  not accessible by personal access token`. Read-only PATs can verify but not
+  fix.
 
 ## The beats (Mission Control UI)
 
