@@ -15,6 +15,8 @@ services:
         value: 0.0.0.0
       - key: NODE_ENV
         value: production
+      - key: SERVER_EXECUTION_TIMEOUT_SECONDS
+        value: '1800'
 
   # The readme-verifier MCP server (pure tools).
   - type: web
@@ -44,3 +46,5 @@ services:
         value: https://trueforge.onrender.com
       - key: TRUEFORGE_AGENT
         value: readme-verifier
+      - key: TURN_TIMEOUT_SECONDS
+        value: '1800'

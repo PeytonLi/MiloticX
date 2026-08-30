@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const BASE_URL = process.env.TRUEFORGE_BASE_URL ?? 'http://localhost:8790';
+const TURN_TIMEOUT_SECONDS = Number(process.env.TURN_TIMEOUT_SECONDS ?? 1800);
 
 const encoder = new TextEncoder();
 const sse = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'sessionId and approvals[] are required' }, { status: 400 });
   }
 
-  const client = new TrueForge({ baseUrl: BASE_URL, timeoutInSeconds: 600 });
+  const client = new TrueForge({ baseUrl: BASE_URL, timeoutInSeconds: TURN_TIMEOUT_SECONDS });
 
   let stream;
   try {

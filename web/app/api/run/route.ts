@@ -5,6 +5,7 @@ export const runtime = 'nodejs';
 
 const BASE_URL = process.env.TRUEFORGE_BASE_URL ?? 'http://localhost:8790';
 const AGENT_NAME = process.env.TRUEFORGE_AGENT ?? 'readme-verifier';
+const TURN_TIMEOUT_SECONDS = Number(process.env.TURN_TIMEOUT_SECONDS ?? 1800);
 
 const encoder = new TextEncoder();
 const sse = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'repo is required' }, { status: 400 });
   }
 
-  const client = new TrueForge({ baseUrl: BASE_URL, timeoutInSeconds: 600 });
+  const client = new TrueForge({ baseUrl: BASE_URL, timeoutInSeconds: TURN_TIMEOUT_SECONDS });
 
   let sessionId = '';
   try {

@@ -99,9 +99,11 @@ pnpm dev            # http://localhost:3000
 
 It proxies the TrueForge SSE turn stream through `/api/run` and `/api/approve`
 (server-side, so there is no CORS issue), and streams events to the browser. Set
-`TRUEFORGE_BASE_URL` (default `http://localhost:8790`) and `TRUEFORGE_AGENT`
-(default `readme-verifier`) to point at your harness and saved agent. The session
-and timeline persist to `localStorage`, so the view survives a page reload.
+`TRUEFORGE_BASE_URL` (default `http://localhost:8790`), `TRUEFORGE_AGENT`
+(default `readme-verifier`), and `TURN_TIMEOUT_SECONDS` (default `1800`, must
+match the harness's `SERVER_EXECUTION_TIMEOUT_SECONDS`) to point at your harness
+and saved agent. The session and timeline persist to `localStorage`, so the view
+survives a page reload.
 
 ## Wiring it into TrueForge
 
